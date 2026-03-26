@@ -15,8 +15,6 @@ import re
 import os
 import sys
 
-# ─── CONFIG ────────────────────────────────────────────────────
-
 RSS_FEEDS = [
     {"name": "CoinDesk",         "url": "https://www.coindesk.com/arc/outboundfeeds/rss/"},
     {"name": "CoinTelegraph",    "url": "https://cointelegraph.com/rss"},
@@ -34,11 +32,8 @@ HOURS_BACK = 8
 MAX_PER_SOURCE = 3
 ISRAEL_TZ = timezone(timedelta(hours=3))
 
-
 def http_get(url, timeout=15):
-    req = urllib.request.Request(url, headers={
-        "User-Agent": "CryptoNewsPipeline/2.0"
-    })
+    req = urllib.request.Request(url, headers={"User-Agent": "CryptoNewsPipeline/2.0"})
     with urllib.request.urlopen(req, timeout=timeout) as resp:
         return resp.read()
 
@@ -67,20 +62,24 @@ def scrape_feed(feed, cutoff):
     for el in root.findall(".//item"):
         title = unescape(el.findtext("title", "").strip())
         link = el.findtext("link", "").strip()
+        desc = clean_html(unescape(el.findtext("description", "")))
         pub = parse_date(el.findtext("pubDate", ""))
         if not title or not link: continue
         if pub and pub < cutoff: continue
-        items.append({"title": title, "url": link, "source": feed["name"], "date": pub})
+        if len(desc) > 300: desc = desc[:297] + "..."
+        items.append({"title": title, "desc": desc, "source": feed["name"], "date": pub})
     if not items:
         ns = {"a": "http://www.w3.org/2005/Atom"}
         for el in root.findall(".//a:entry", ns):
             title = unescape(el.findtext("a:title", "", ns).strip())
             link_el = el.find("a:link", ns)
             link = link_el.get("href", "") if link_el is not None else ""
+            summary = clean_html(unescape(el.findtext("a:summary", "", ns)))
             pub = parse_date(el.findtext("a:published", "", ns))
             if not title or not link: continue
             if pub and pub < cutoff: continue
-            items.append({"title": title, "url": link, "source": feed["name"], "date": pub})
+            if len(summary) > 300: summary = summary[:297] + "..."
+            items.append({"title": title, "desc": summary, "source": feed["name"], "date": pub})
     return items[:MAX_PER_SOURCE]
 
 def fetch_prices():
@@ -107,7 +106,7 @@ def send_telegram(token, chat_id, text):
 
 def translate_he(text):
     try:
-        encoded = urllib.parse.quote(text[:180])
+        encoded = urllib.parse.quote(text[:300])
         url = f"https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=he&dt=t&q={encoded}"
         req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
         with urllib.request.urlopen(req, timeout=10) as resp:
@@ -115,54 +114,85 @@ def translate_he(text):
             return "".join(p[0] for p in data[0] if p[0])
     except: return text
 
+def wrap_text(text, width=38):
+    """Break long text into lines of ~width chars at word boundaries."""
+    words = text.split()
+    lines, current = [], ""
+    for word in words:
+        if current and len(current) + len(word) + 1 > width:
+            lines.append(current)
+            current = word
+        else:
+            current = f"{current} {word}" if current else word
+    if current:
+        lines.append(current)
+    return lines
+
 def build_message(news, prices):
     now = datetime.now(ISRAEL_TZ)
     L = []
+
     L.append("┌─────────────────────┐")
-    L.append("   📊  סקירת קריפטו יומית")
+    L.append(f"   📊  סקירת קריפטו יומית")
     L.append(f"   {now.strftime('%d.%m.%Y')}  |  {now.strftime('%H:%M')}")
     L.append("└─────────────────────┘")
     L.append("")
+
+    # ── מצב שוק ──
     if prices:
-        tc, cn = 0, 0
-        for cg_id, _ in COIN_SYMBOLS:
+        changes = []
+        for cg_id, sym in COIN_SYMBOLS:
             d = prices.get(cg_id)
-            if d:
-                tc += d.get("usd_24h_change", 0)
-                cn += 1
-        av = tc / cn if cn else 0
-        if av <= -3: mood = "🔴 השוק אדום — ירידות חדות"
-        elif av < 0: mood = "🟠 השוק בירידות מתונות"
-        elif av < 3: mood = "🟢 השוק ירוק — עליות קלות"
-        else: mood = "🟢 השוק ירוק — עליות חזקות"
+            if d: changes.append(d.get("usd_24h_change", 0))
+
+        avg_change = sum(changes) / len(changes) if changes else 0
+        if avg_change <= -5:
+            mood = "🔴 השוק אדום — ירידות חדות"
+        elif avg_change <= -2:
+            mood = "🟠 השוק בירידה מתונה"
+        elif avg_change <= 0:
+            mood = "🟡 השוק יציב עם ירידות קלות"
+        elif avg_change <= 3:
+            mood = "🟢 השוק ירוק — עליות קלות"
+        else:
+            mood = "🟢 השוק ירוק — עליות חדות"
         L.append(mood)
         L.append("")
+
         for cg_id, sym in COIN_SYMBOLS:
             d = prices.get(cg_id)
             if not d: continue
             p, ch = d["usd"], d.get("usd_24h_change", 0)
-            ic = "▲" if ch >= 0 else "▼"
+            arrow = "▲" if ch >= 0 else "▼"
             ps = f"${p:,.0f}" if p >= 1000 else f"${p:,.2f}" if p >= 1 else f"${p:.4f}"
-            L.append(f"  {ic} {sym}  {ps}  ({ch:+.1f}%)")
+            L.append(f"  {arrow} {sym}  {ps}  ({ch:+.1f}%)")
         L.append("")
+
+    # ── חדשות ──
     if news:
         L.append("╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌")
         L.append("📰  מה חדש היום:")
         L.append("")
+
         for i, item in enumerate(news[:6], 1):
-            he = translate_he(item["title"])
-            if len(he) > 80:
-                he = he[:77] + "..."
-            L.append(f"  {i}. {he}")
-            if item.get("desc") and len(item["desc"]) > 15:
-                dh = translate_he(item["desc"])
-                if len(dh) > 90:
-                    dh = dh[:87] + "..."
-                L.append(f"     ↳ {dh}")
+            title_he = translate_he(item["title"])
+            if len(title_he) > 80:
+                title_he = title_he[:77] + "..."
+
+            L.append(f"  {i}. {title_he}")
+
+            if item.get("desc") and len(item["desc"]) > 30:
+                desc_he = translate_he(item["desc"])
+                desc_lines = wrap_text(desc_he, 40)
+                for line in desc_lines[:4]:
+                    L.append(f"     {line}")
+
             L.append(f"     [{item['source']}]")
             L.append("")
+
     L.append("╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌")
     L.append("🤖 סקירה אוטומטית • כל 4 שעות")
+
     return "\n".join(L)
 
 def main():
