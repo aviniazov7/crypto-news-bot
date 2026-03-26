@@ -174,13 +174,19 @@ def build_message(news: list[dict], prices: dict) -> str:
         msg += "📰 <b>Headlines</b>\n\n"
         for i, item in enumerate(news[:MAX_HEADLINES], 1):
             title = item["title"]
-            if len(title) > 75:
-                title = title[:72] + "..."
-            msg += f'{i}.  <a href="{item["url"]}">{title}</a>\n'
-            msg += f'     <i>{item["source"]}</i>\n\n'
+            if len(title) > 90:
+                title = title[:87] + "..."
+            msg += f"{i}.  <b>{title}</b>\n"
+            msg += f"     📌 {item['source']}"
+            if item.get("desc"):
+                desc = item["desc"]
+                if len(desc) > 120:
+                    desc = desc[:117] + "..."
+                msg += f"  •  {desc}"
+            msg += "\n\n"
 
     msg += "━━━━━━━━━━━━━━━━━━━━━━\n"
-    msg += "🤖 <i>GitHub Actions  •  RSS + CoinGecko  •  $0/mo</i>"
+    msg += "🤖 GitHub Actions  •  RSS + CoinGecko  •  $0/mo"
     return msg
 
 
