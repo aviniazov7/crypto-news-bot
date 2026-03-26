@@ -130,9 +130,10 @@ def wrap_text(text, width=38):
 
 def build_message(news, prices):
     now = datetime.now(ISRAEL_TZ)
+    R = "\u200F"
     L = []
 
-    L.append(f"📊 סקירת קריפטו | {now.strftime('%d.%m.%Y')} | {now.strftime('%H:%M')}")
+    L.append(f"{R}📊 סקירת קריפטו | {now.strftime('%d.%m.%Y')} | {now.strftime('%H:%M')}")
     L.append("")
 
     if prices:
@@ -143,7 +144,7 @@ def build_message(news, prices):
         elif avg <= 0: mood = "🟡 השוק יציב — ירידות קלות"
         elif avg <= 3: mood = "🟢 השוק ירוק — עליות"
         else: mood = "🟢 עליות חדות בשוק"
-        L.append(mood)
+        L.append(f"{R}{mood}")
         L.append("")
 
         for cg_id, sym in COIN_SYMBOLS:
@@ -152,29 +153,30 @@ def build_message(news, prices):
             p, ch = d["usd"], d.get("usd_24h_change", 0)
             arrow = "▲" if ch >= 0 else "▼"
             ps = f"${p:,.0f}" if p >= 1000 else f"${p:,.2f}" if p >= 1 else f"${p:.4f}"
-            L.append(f"  {arrow} {sym}  {ps}  ({ch:+.1f}%)")
+            L.append(f"{R}  {arrow} {sym}  {ps}  ({ch:+.1f}%)")
         L.append("")
 
     if news:
-        L.append("╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌")
+        L.append(f"{R}╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌")
+        L.append(f"{R}📰 מה חדש היום:")
         L.append("")
 
         for i, item in enumerate(news[:5], 1):
             title_he = translate_he(item["title"])
             if len(title_he) > 85:
                 title_he = title_he[:82] + "..."
-            L.append(f"{i}. {title_he}")
+            L.append(f"{R}{i}. {title_he}")
 
             if item.get("desc") and len(item["desc"]) > 30:
                 desc_he = translate_he(item["desc"])
                 for line in wrap_text(desc_he, 42)[:4]:
-                    L.append(f"   {line}")
+                    L.append(f"{R}   {line}")
 
-            L.append(f"   [{item['source']}]")
+            L.append(f"{R}   [{item['source']}]")
             L.append("")
 
-    L.append("╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌")
-    L.append("🤖 סקירה אוטומטית • כל 4 שעות")
+    L.append(f"{R}╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌")
+    L.append(f"{R}🤖 סקירה אוטומטית • כל 4 שעות")
 
     return "\n".join(L)
 
