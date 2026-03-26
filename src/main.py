@@ -127,7 +127,7 @@ def fetch_prices() -> dict:
 def send_telegram(token: str, chat_id: str, text: str) -> bool:
     payload = json.dumps({
         "chat_id": chat_id, "text": text,
-        "parse_mode": "HTML", "disable_web_page_preview": True,
+        "parse_mode": "Markdown", "disable_web_page_preview": True,
     }).encode()
     req = urllib.request.Request(
         f"https://api.telegram.org/bot{token}/sendMessage",
@@ -148,13 +148,13 @@ def send_telegram(token: str, chat_id: str, text: str) -> bool:
 
 def build_message(news: list[dict], prices: dict) -> str:
     now = datetime.now(ISRAEL_TZ)
-    t = now.strftime("%d/%m %H:%M")
+    t = now.strftime("%H:%M  •  %d/%m/%Y")
 
-    msg = f"⚡️ <b>סקירת קריפטו</b>  •  {t}\n\n"
+    msg = f"⚡️  𝗦𝗸𝗶𝗿𝗮𝘁 𝗤𝗿𝘆𝗽𝘁𝗼\n{t}\n\n"
 
     # ── מחירים ──
     if prices:
-        msg += "💰 <b>מחירים</b>\n\n"
+        lines = []
         for cg_id, sym in COIN_SYMBOLS:
             d = prices.get(cg_id)
             if not d:
@@ -168,29 +168,31 @@ def build_message(news: list[dict], prices: dict) -> str:
                 ps = f"${p:,.2f}"
             else:
                 ps = f"${p:.4f}"
-            msg += f"{arrow}  <b>{sym}</b>  {ps}  ({ch:+.1f}%)\n"
-        msg += "\n"
+            lines.append(f"{arrow} {sym}  {ps}  ({ch:+.1f}%)")
+
+        msg += "\n".join(lines)
+        msg += "\n\n"
 
     # ── כותרות ──
     if news:
-        msg += "📰 <b>כותרות</b>\n\n"
+        msg += "▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬\n\n"
         for i, item in enumerate(news[:MAX_HEADLINES], 1):
             title = item["title"]
             if len(title) > 90:
                 title = title[:87] + "..."
 
-            msg += f"<b>{i}. {title}</b>\n"
+            msg += f"◾️  {title}\n"
 
             if item.get("desc"):
                 desc = item["desc"]
-                if len(desc) > 120:
-                    desc = desc[:117] + "..."
-                msg += f"{desc}\n"
+                if len(desc) > 100:
+                    desc = desc[:97] + "..."
+                msg += f"      {desc}\n"
 
-            msg += f"— {item['source']}\n\n"
+            msg += f"      _{item['source']}_\n\n"
 
-    msg += "─────────────────\n"
-    msg += "🤖 אוטומטי • GitHub Actions • $0"
+    msg += "▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬\n"
+    msg += "בוט אוטומטי  •  כל 4 שעות"
     return msg
 
 
