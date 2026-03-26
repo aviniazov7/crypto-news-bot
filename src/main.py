@@ -118,37 +118,51 @@ def translate_he(text):
 def build_message(news, prices):
     now = datetime.now(ISRAEL_TZ)
     L = []
-
-    L.append(f"📊 סקירת שוק הקריפטו")
-    L.append(f"{now.strftime('%d.%m.%Y')}  •  {now.strftime('%H:%M')} שעון ישראל")
+    L.append("┌─────────────────────┐")
+    L.append("   📊  סקירת קריפטו יומית")
+    L.append(f"   {now.strftime('%d.%m.%Y')}  |  {now.strftime('%H:%M')}")
+    L.append("└─────────────────────┘")
     L.append("")
-
     if prices:
-        L.append("💰 מצב השוק כרגע:")
+        tc, cn = 0, 0
+        for cg_id, _ in COIN_SYMBOLS:
+            d = prices.get(cg_id)
+            if d:
+                tc += d.get("usd_24h_change", 0)
+                cn += 1
+        av = tc / cn if cn else 0
+        if av <= -3: mood = "🔴 השוק אדום — ירידות חדות"
+        elif av < 0: mood = "🟠 השוק בירידות מתונות"
+        elif av < 3: mood = "🟢 השוק ירוק — עליות קלות"
+        else: mood = "🟢 השוק ירוק — עליות חזקות"
+        L.append(mood)
         L.append("")
         for cg_id, sym in COIN_SYMBOLS:
             d = prices.get(cg_id)
             if not d: continue
             p, ch = d["usd"], d.get("usd_24h_change", 0)
-            icon = "🟢" if ch >= 0 else "🔴"
+            ic = "▲" if ch >= 0 else "▼"
             ps = f"${p:,.0f}" if p >= 1000 else f"${p:,.2f}" if p >= 1 else f"${p:.4f}"
-            L.append(f"   {icon} {sym}   {ps}   ({ch:+.1f}%)")
+            L.append(f"  {ic} {sym}  {ps}  ({ch:+.1f}%)")
         L.append("")
-
     if news:
-        L.append("📰 הכותרות המרכזיות:")
+        L.append("╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌")
+        L.append("📰  מה חדש היום:")
         L.append("")
-
-        for item in news[:6]:
+        for i, item in enumerate(news[:6], 1):
             he = translate_he(item["title"])
-            if len(he) > 85: he = he[:82] + "..."
-            L.append(f"   ● {he}")
-            L.append(f"     מקור: {item['source']}")
+            if len(he) > 80:
+                he = he[:77] + "..."
+            L.append(f"  {i}. {he}")
+            if item.get("desc") and len(item["desc"]) > 15:
+                dh = translate_he(item["desc"])
+                if len(dh) > 90:
+                    dh = dh[:87] + "..."
+                L.append(f"     ↳ {dh}")
+            L.append(f"     [{item['source']}]")
             L.append("")
-
-    L.append("")
+    L.append("╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌")
     L.append("🤖 סקירה אוטומטית • כל 4 שעות")
-
     return "\n".join(L)
 
 def main():
