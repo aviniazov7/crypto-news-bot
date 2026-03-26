@@ -119,31 +119,35 @@ def build_message(news, prices):
     now = datetime.now(ISRAEL_TZ)
     L = []
 
-    L.append(f"📊  סקירה יומית  •  {now.strftime('%d.%m.%Y  %H:%M')}")
+    L.append(f"📊 סקירת שוק הקריפטו")
+    L.append(f"{now.strftime('%d.%m.%Y')}  •  {now.strftime('%H:%M')} שעון ישראל")
     L.append("")
 
     if prices:
+        L.append("💰 מצב השוק כרגע:")
+        L.append("")
         for cg_id, sym in COIN_SYMBOLS:
             d = prices.get(cg_id)
             if not d: continue
             p, ch = d["usd"], d.get("usd_24h_change", 0)
             icon = "🟢" if ch >= 0 else "🔴"
             ps = f"${p:,.0f}" if p >= 1000 else f"${p:,.2f}" if p >= 1 else f"${p:.4f}"
-            L.append(f"  {icon}  {sym}   {ps}   {ch:+.1f}%")
-        L.append("")
-        L.append("─ ─ ─ ─ ─ ─ ─ ─ ─")
+            L.append(f"   {icon} {sym}   {ps}   ({ch:+.1f}%)")
         L.append("")
 
     if news:
+        L.append("📰 הכותרות המרכזיות:")
+        L.append("")
+
         for item in news[:6]:
             he = translate_he(item["title"])
-            if len(he) > 80: he = he[:77] + "..."
-            L.append(f"•  {he}")
-            L.append(f"   — {item['source']}")
+            if len(he) > 85: he = he[:82] + "..."
+            L.append(f"   ● {he}")
+            L.append(f"     מקור: {item['source']}")
             L.append("")
 
-    L.append("─ ─ ─ ─ ─ ─ ─ ─ ─")
-    L.append("🤖  בוט אוטומטי  •  כל 4 שעות")
+    L.append("")
+    L.append("🤖 סקירה אוטומטית • כל 4 שעות")
 
     return "\n".join(L)
 
