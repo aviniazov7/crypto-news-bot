@@ -12,6 +12,7 @@ Zero pip dependencies — Python standard library only.
 
 import json
 import urllib.request
+import urllib.parse
 import xml.etree.ElementTree as ET
 from datetime import datetime, timedelta, timezone
 from html import unescape
@@ -127,7 +128,7 @@ def fetch_prices() -> dict:
 def send_telegram(token: str, chat_id: str, text: str) -> bool:
     payload = json.dumps({
         "chat_id": chat_id, "text": text,
-        "parse_mode": "Markdown", "disable_web_page_preview": True,
+        "disable_web_page_preview": True,
     }).encode()
     req = urllib.request.Request(
         f"https://api.telegram.org/bot{token}/sendMessage",
@@ -146,53 +147,60 @@ def send_telegram(token: str, chat_id: str, text: str) -> bool:
         return False
 
 
+def translate_he(text: str) -> str:
+    """Translate to Hebrew via Google Translate (free, no key)."""
+    try:
+        encoded = urllib.parse.quote(text)
+        url = (f"https://translate.googleapis.com/translate_a/single"
+               f"?client=gtx&sl=en&tl=he&dt=t&q={encoded}")
+        req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            data = json.loads(resp.read().decode())
+            return "".join(p[0] for p in data[0] if p[0])
+    except Exception:
+        return text
+
+
 def build_message(news: list[dict], prices: dict) -> str:
     now = datetime.now(ISRAEL_TZ)
-    t = now.strftime("%H:%M  •  %d/%m/%Y")
 
-    msg = f"⚡️  𝗦𝗸𝗶𝗿𝗮𝘁 𝗤𝗿𝘆𝗽𝘁𝗼\n{t}\n\n"
+    msg = f"⚡️ סקירת קריפטו יומית\n"
+    msg += f"📅 {now.strftime('%d/%m/%Y')}  |  🕐 {now.strftime('%H:%M')}\n"
+    msg += "━━━━━━━━━━━━━━━━━━\n\n"
 
-    # ── מחירים ──
     if prices:
-        lines = []
         for cg_id, sym in COIN_SYMBOLS:
             d = prices.get(cg_id)
             if not d:
                 continue
-            p = d.get("usd", 0)
+            p = d["usd"]
             ch = d.get("usd_24h_change", 0)
             arrow = "🟢" if ch >= 0 else "🔴"
-            if p >= 1000:
-                ps = f"${p:,.0f}"
-            elif p >= 1:
-                ps = f"${p:,.2f}"
-            else:
-                ps = f"${p:.4f}"
-            lines.append(f"{arrow} {sym}  {ps}  ({ch:+.1f}%)")
+            ps = f"${p:,.0f}" if p >= 1000 else f"${p:,.2f}" if p >= 1 else f"${p:.4f}"
+            msg += f"{arrow} {sym}  {ps}  ({ch:+.1f}%)\n"
+        msg += "\n"
 
-        msg += "\n".join(lines)
-        msg += "\n\n"
-
-    # ── כותרות ──
     if news:
-        msg += "▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬\n\n"
-        for i, item in enumerate(news[:MAX_HEADLINES], 1):
-            title = item["title"]
-            if len(title) > 90:
-                title = title[:87] + "..."
+        msg += "📰 מה קורה בשוק:\n"
+        msg += "━━━━━━━━━━━━━━━━━━\n\n"
 
-            msg += f"◾️  {title}\n"
+        for item in news[:8]:
+            title_he = translate_he(item["title"])
+            if len(title_he) > 100:
+                title_he = title_he[:97] + "..."
 
-            if item.get("desc"):
-                desc = item["desc"]
-                if len(desc) > 100:
-                    desc = desc[:97] + "..."
-                msg += f"      {desc}\n"
+            msg += f"▸ {title_he}\n"
 
-            msg += f"      _{item['source']}_\n\n"
+            if item.get("desc") and len(item["desc"]) > 20:
+                desc_he = translate_he(item["desc"])
+                if len(desc_he) > 100:
+                    desc_he = desc_he[:97] + "..."
+                msg += f"  {desc_he}\n"
 
-    msg += "▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬\n"
-    msg += "בוט אוטומטי  •  כל 4 שעות"
+            msg += f"  — {item['source']}\n\n"
+
+    msg += "━━━━━━━━━━━━━━━━━━\n"
+    msg += "🤖 בוט אוטומטי • כל 4 שעות"
     return msg
 
 
