@@ -149,11 +149,12 @@ def send_telegram(token: str, chat_id: str, text: str) -> bool:
 def build_message(news: list[dict], prices: dict) -> str:
     now = datetime.now(ISRAEL_TZ)
     t = now.strftime("%d/%m %H:%M")
-    msg = f"⚡️ <b>Crypto Briefing</b>  |  {t}\n"
-    msg += "━━━━━━━━━━━━━━━━━━━━━━\n\n"
 
+    msg = f"⚡️ <b>סקירת קריפטו</b>  •  {t}\n\n"
+
+    # ── מחירים ──
     if prices:
-        msg += "💰 <b>Prices</b>\n"
+        msg += "💰 <b>מחירים</b>\n\n"
         for cg_id, sym in COIN_SYMBOLS:
             d = prices.get(cg_id)
             if not d:
@@ -167,26 +168,29 @@ def build_message(news: list[dict], prices: dict) -> str:
                 ps = f"${p:,.2f}"
             else:
                 ps = f"${p:.4f}"
-            msg += f"  {arrow} <code>{sym:>4}</code>  {ps}  ({ch:+.1f}%)\n"
+            msg += f"{arrow}  <b>{sym}</b>  {ps}  ({ch:+.1f}%)\n"
         msg += "\n"
 
+    # ── כותרות ──
     if news:
-        msg += "📰 <b>Headlines</b>\n\n"
+        msg += "📰 <b>כותרות</b>\n\n"
         for i, item in enumerate(news[:MAX_HEADLINES], 1):
             title = item["title"]
             if len(title) > 90:
                 title = title[:87] + "..."
-            msg += f"{i}.  <b>{title}</b>\n"
-            msg += f"     📌 {item['source']}"
+
+            msg += f"<b>{i}. {title}</b>\n"
+
             if item.get("desc"):
                 desc = item["desc"]
                 if len(desc) > 120:
                     desc = desc[:117] + "..."
-                msg += f"  •  {desc}"
-            msg += "\n\n"
+                msg += f"{desc}\n"
 
-    msg += "━━━━━━━━━━━━━━━━━━━━━━\n"
-    msg += "🤖 GitHub Actions  •  RSS + CoinGecko  •  $0/mo"
+            msg += f"— {item['source']}\n\n"
+
+    msg += "─────────────────\n"
+    msg += "🤖 אוטומטי • GitHub Actions • $0"
     return msg
 
 
