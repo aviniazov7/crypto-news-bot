@@ -132,30 +132,17 @@ def build_message(news, prices):
     now = datetime.now(ISRAEL_TZ)
     L = []
 
-    L.append("┌─────────────────────┐")
-    L.append(f"   📊  סקירת קריפטו יומית")
-    L.append(f"   {now.strftime('%d.%m.%Y')}  |  {now.strftime('%H:%M')}")
-    L.append("└─────────────────────┘")
+    L.append(f"📊 סקירת קריפטו | {now.strftime('%d.%m.%Y')} | {now.strftime('%H:%M')}")
     L.append("")
 
-    # ── מצב שוק ──
     if prices:
-        changes = []
-        for cg_id, sym in COIN_SYMBOLS:
-            d = prices.get(cg_id)
-            if d: changes.append(d.get("usd_24h_change", 0))
-
-        avg_change = sum(changes) / len(changes) if changes else 0
-        if avg_change <= -5:
-            mood = "🔴 השוק אדום — ירידות חדות"
-        elif avg_change <= -2:
-            mood = "🟠 השוק בירידה מתונה"
-        elif avg_change <= 0:
-            mood = "🟡 השוק יציב עם ירידות קלות"
-        elif avg_change <= 3:
-            mood = "🟢 השוק ירוק — עליות קלות"
-        else:
-            mood = "🟢 השוק ירוק — עליות חדות"
+        changes = [prices[c].get("usd_24h_change", 0) for c in prices]
+        avg = sum(changes) / len(changes) if changes else 0
+        if avg <= -5: mood = "🔴 יום אדום בשוק — ירידות חדות"
+        elif avg <= -2: mood = "🟠 השוק בירידה מתונה"
+        elif avg <= 0: mood = "🟡 השוק יציב — ירידות קלות"
+        elif avg <= 3: mood = "🟢 השוק ירוק — עליות"
+        else: mood = "🟢 עליות חדות בשוק"
         L.append(mood)
         L.append("")
 
@@ -168,29 +155,25 @@ def build_message(news, prices):
             L.append(f"  {arrow} {sym}  {ps}  ({ch:+.1f}%)")
         L.append("")
 
-    # ── חדשות ──
     if news:
-        L.append("╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌")
-        L.append("📰  מה חדש היום:")
+        L.append("╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌")
         L.append("")
 
-        for i, item in enumerate(news[:6], 1):
+        for i, item in enumerate(news[:5], 1):
             title_he = translate_he(item["title"])
-            if len(title_he) > 80:
-                title_he = title_he[:77] + "..."
-
-            L.append(f"  {i}. {title_he}")
+            if len(title_he) > 85:
+                title_he = title_he[:82] + "..."
+            L.append(f"{i}. {title_he}")
 
             if item.get("desc") and len(item["desc"]) > 30:
                 desc_he = translate_he(item["desc"])
-                desc_lines = wrap_text(desc_he, 40)
-                for line in desc_lines[:4]:
-                    L.append(f"     {line}")
+                for line in wrap_text(desc_he, 42)[:4]:
+                    L.append(f"   {line}")
 
-            L.append(f"     [{item['source']}]")
+            L.append(f"   [{item['source']}]")
             L.append("")
 
-    L.append("╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌")
+    L.append("╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌")
     L.append("🤖 סקירה אוטומטית • כל 4 שעות")
 
     return "\n".join(L)
