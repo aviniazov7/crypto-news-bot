@@ -32,8 +32,11 @@ ISRAEL_TZ = timezone(timedelta(hours=3))
 
 # ── Helpers ─────────────────────────────────────────────────────────
 
-def http_get(url, timeout=15):
-    req = urllib.request.Request(url, headers={"User-Agent": "CryptoNewsPipeline/2.0"})
+def http_get(url, timeout=15, extra_headers=None):
+    headers = {"User-Agent": "CryptoNewsPipeline/2.0"}
+    if extra_headers:
+        headers.update(extra_headers)
+    req = urllib.request.Request(url, headers=headers)
     with urllib.request.urlopen(req, timeout=timeout) as resp:
         return resp.read()
 
@@ -139,14 +142,18 @@ def fetch_all_news():
 
 # ── CoinGecko Prices ───────────────────────────────────────────────
 
-def fetch_prices():
+def _cg_headers():
+    """Get CoinGecko API headers."""
     cg_key = os.environ.get("COINGECKO_API_KEY", "")
     if cg_key:
-        url = f"https://api.coingecko.com/api/v3/simple/price?ids={COINS}&vs_currencies=usd&include_24hr_change=true&x_cg_demo_api_key={cg_key}"
-    else:
-        url = f"https://api.coingecko.com/api/v3/simple/price?ids={COINS}&vs_currencies=usd&include_24hr_change=true"
+        return {"x-cg-demo-api-key": cg_key}
+    return {}
+
+
+def fetch_prices():
+    url = f"https://api.coingecko.com/api/v3/simple/price?ids={COINS}&vs_currencies=usd&include_24hr_change=true"
     try:
-        return json.loads(http_get(url))
+        return json.loads(http_get(url, extra_headers=_cg_headers()))
     except Exception as e:
         print(f"  ⚠️  CoinGecko: {e}")
         return {}
