@@ -113,19 +113,39 @@ MAIN_MENU = {
 COIN_MENU = {
     "inline_keyboard": [
         [
-            {"text": "BTC", "callback_data": "chart_btc"},
-            {"text": "ETH", "callback_data": "chart_eth"},
-            {"text": "SOL", "callback_data": "chart_sol"},
+            {"text": "BTC", "callback_data": "coin_btc"},
+            {"text": "ETH", "callback_data": "coin_eth"},
+            {"text": "SOL", "callback_data": "coin_sol"},
         ],
         [
-            {"text": "BNB", "callback_data": "chart_bnb"},
-            {"text": "XRP", "callback_data": "chart_xrp"},
+            {"text": "BNB", "callback_data": "coin_bnb"},
+            {"text": "XRP", "callback_data": "coin_xrp"},
         ],
         [
             {"text": "⬅️ חזרה", "callback_data": "cmd_menu"},
         ],
     ]
 }
+
+
+def make_timeframe_menu(symbol):
+    """Create timeframe selection menu for a specific coin."""
+    return {
+        "inline_keyboard": [
+            [
+                {"text": "1D (30m)", "callback_data": f"tf_{symbol}_1"},
+                {"text": "7D (4h)", "callback_data": f"tf_{symbol}_7"},
+            ],
+            [
+                {"text": "14D (4h)", "callback_data": f"tf_{symbol}_14"},
+                {"text": "30D (1d)", "callback_data": f"tf_{symbol}_30"},
+            ],
+            [
+                {"text": "⬅️ בחר מטבע", "callback_data": "cmd_chart"},
+                {"text": "🏠 תפריט", "callback_data": "cmd_menu"},
+            ],
+        ]
+    }
 
 
 def set_bot_commands():
@@ -179,14 +199,19 @@ def handle_chart_menu(chat_id):
     send_message(chat_id, f"{R}📊 בחר מטבע לגרף:", reply_markup=COIN_MENU)
 
 
-def handle_chart(chat_id, symbol):
-    send_message(chat_id, f"⏳ יוצר גרף {symbol.upper()}...")
-    image_bytes, caption = charts.get_chart_image(symbol)
+def handle_coin_selected(chat_id, symbol):
+    R = "\u200F"
+    send_message(chat_id, f"{R}📊 {symbol.upper()} — בחר טיימפריים:", reply_markup=make_timeframe_menu(symbol))
+
+
+def handle_chart(chat_id, symbol, days=7):
+    send_message(chat_id, f"⏳ יוצר גרף {symbol.upper()} ({days}D)...")
+    image_bytes, caption = charts.get_chart_image(symbol, days)
     if image_bytes:
         send_photo(chat_id, image_bytes, caption)
     else:
-        send_message(chat_id, caption)  # error message
-    send_message(chat_id, "\u200F📊 בחר מטבע נוסף או חזור:", reply_markup=COIN_MENU)
+        send_message(chat_id, caption)
+    send_message(chat_id, "\u200F📊 בחר טיימפריים אחר או מטבע:", reply_markup=make_timeframe_menu(symbol))
 
 
 def handle_twitter_list(chat_id):
@@ -294,9 +319,14 @@ def process_callback(callback):
         handle_summary(chat_id)
     elif data == "cmd_menu":
         handle_start(chat_id)
-    elif data.startswith("chart_"):
-        symbol = data.replace("chart_", "")
-        handle_chart(chat_id, symbol)
+    elif data.startswith("coin_"):
+        symbol = data.replace("coin_", "")
+        handle_coin_selected(chat_id, symbol)
+    elif data.startswith("tf_"):
+        # format: tf_{symbol}_{days}
+        parts = data.split("_")
+        symbol, days = parts[1], int(parts[2])
+        handle_chart(chat_id, symbol, days)
 
 # ── Scheduled Tasks ────────────────────────────────────────────────
 
