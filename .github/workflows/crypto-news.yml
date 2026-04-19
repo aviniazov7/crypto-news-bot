@@ -1,8 +1,10 @@
 name: Crypto News Briefing
 
+# Cron disabled — bot now runs 24/7 on Render.
+# Keep workflow_dispatch for testing only.
 on:
-  schedule:
-    - cron: '0 */4 * * *'
+  # schedule:
+  #   - cron: '0 */4 * * *'
   workflow_dispatch:
 
 jobs:

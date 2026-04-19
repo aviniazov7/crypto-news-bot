@@ -1,0 +1,75 @@
+"""
+AI-powered news summary using Google Gemini API.
+Summarizes crypto news into concise Hebrew bullet points.
+"""
+
+import json
+import os
+import urllib.request
+
+
+GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
+GEMINI_MODEL = "gemini-2.0-flash"
+GEMINI_URL = f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:generateContent"
+
+
+def summarize_news(news_items):
+    """
+    Summarize a list of news items into Hebrew bullet points.
+    Returns summary string or fallback message.
+    """
+    if not GEMINI_API_KEY:
+        return "⚠️ סיכום AI לא זמין — חסר GEMINI_API_KEY"
+
+    if not news_items:
+        return "אין חדשות לסכם כרגע"
+
+    # build headlines text
+    headlines = []
+    for i, item in enumerate(news_items[:10], 1):
+        line = f"{i}. {item['title']}"
+        if item.get("desc"):
+            line += f" — {item['desc'][:100]}"
+        headlines.append(line)
+    headlines_text = "\n".join(headlines)
+
+    prompt = (
+        "You are a crypto market analyst writing for Hebrew-speaking traders.\n"
+        "Summarize the following crypto news headlines into 3-5 concise bullet points in Hebrew.\n"
+        "Focus on: market impact, key events, and actionable insights.\n"
+        "Use emojis for visual clarity. Keep each bullet to 1-2 sentences.\n\n"
+        f"Headlines:\n{headlines_text}\n\n"
+        "Write the summary in Hebrew:"
+    )
+
+    payload = json.dumps({
+        "contents": [{"parts": [{"text": prompt}]}],
+        "generationConfig": {
+            "temperature": 0.7,
+            "maxOutputTokens": 500,
+        },
+    }).encode("utf-8")
+
+    url = f"{GEMINI_URL}?key={GEMINI_API_KEY}"
+    req = urllib.request.Request(
+        url,
+        data=payload,
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+
+    try:
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            data = json.loads(resp.read().decode())
+            candidates = data.get("candidates", [])
+            if candidates:
+                parts = candidates[0].get("content", {}).get("parts", [])
+                if parts:
+                    summary = parts[0].get("text", "").strip()
+                    if summary:
+                        R = "\u200F"
+                        return f"{R}🤖 סיכום AI:\n\n{R}{summary}"
+        return "⚠️ לא הצלחתי ליצור סיכום כרגע"
+    except Exception as e:
+        print(f"  ⚠️  Gemini API: {e}")
+        return "⚠️ שגיאה בסיכום AI — נסה שוב מאוחר יותר"
