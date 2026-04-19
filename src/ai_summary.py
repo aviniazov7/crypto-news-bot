@@ -10,7 +10,6 @@ import urllib.request
 
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
 GEMINI_MODEL = "gemini-2.0-flash"
-GEMINI_URL = f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:generateContent"
 
 
 def summarize_news(news_items):
@@ -50,7 +49,7 @@ def summarize_news(news_items):
         },
     }).encode("utf-8")
 
-    url = f"{GEMINI_URL}?key={GEMINI_API_KEY}"
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:generateContent?key={GEMINI_API_KEY}"
     req = urllib.request.Request(
         url,
         data=payload,
@@ -59,7 +58,7 @@ def summarize_news(news_items):
     )
 
     try:
-        with urllib.request.urlopen(req, timeout=15) as resp:
+        with urllib.request.urlopen(req, timeout=30) as resp:
             data = json.loads(resp.read().decode())
             candidates = data.get("candidates", [])
             if candidates:
@@ -70,6 +69,14 @@ def summarize_news(news_items):
                         R = "\u200F"
                         return f"{R}🤖 סיכום AI:\n\n{R}{summary}"
         return "⚠️ לא הצלחתי ליצור סיכום כרגע"
+    except urllib.error.HTTPError as e:
+        body = e.read().decode() if e.fp else ""
+        print(f"  ⚠️  Gemini API HTTP {e.code}: {body[:300]}")
+        if e.code == 400 and "not found" in body.lower():
+            return "⚠️ מודל Gemini לא זמין — בדוק את שם המודל"
+        if e.code in (401, 403):
+            return "⚠️ מפתח Gemini לא תקין — בדוק GEMINI_API_KEY"
+        return "⚠️ שגיאה בסיכום AI — נסה שוב מאוחר יותר"
     except Exception as e:
         print(f"  ⚠️  Gemini API: {e}")
         return "⚠️ שגיאה בסיכום AI — נסה שוב מאוחר יותר"
