@@ -1,12 +1,17 @@
 """
-Price chart generation using CoinGecko history + QuickChart.io.
-Returns chart image bytes to send via Telegram sendPhoto.
+Candlestick chart generation using CoinGecko OHLC + mplfinance.
+Generates professional dark-themed candlestick charts.
 """
 
+import io
 import json
 import os
-import urllib.parse
 from datetime import datetime, timezone
+
+import matplotlib
+matplotlib.use("Agg")
+import mplfinance as mpf
+import pandas as pd
 
 from news import http_get, COIN_SYMBOLS
 
@@ -14,87 +19,85 @@ from news import http_get, COIN_SYMBOLS
 SYMBOL_TO_ID = {sym.lower(): cg_id for cg_id, sym in COIN_SYMBOLS}
 
 
-def _fetch_price_history(coin_id, days=7):
-    """Fetch price history from CoinGecko."""
+def _fetch_ohlc(coin_id, days=7):
+    """Fetch OHLC data from CoinGecko."""
     cg_key = os.environ.get("COINGECKO_API_KEY", "")
     key_param = f"&x_cg_demo_api_key={cg_key}" if cg_key else ""
-    url = f"https://api.coingecko.com/api/v3/coins/{coin_id}/market_chart?vs_currency=usd&days={days}{key_param}"
+    url = f"https://api.coingecko.com/api/v3/coins/{coin_id}/ohlc?vs_currency=usd&days={days}{key_param}"
     try:
         data = json.loads(http_get(url))
-        return data.get("prices", [])
+        return data  # [[timestamp, open, high, low, close], ...]
     except Exception as e:
-        print(f"  ⚠️  Chart data: {e}")
+        print(f"  ⚠️  OHLC data: {e}")
         return []
 
 
-def _build_chart_url(coin_symbol, prices):
-    """Build a QuickChart.io URL for a line chart."""
-    # sample every Nth point to keep URL short
-    step = max(1, len(prices) // 50)
-    sampled = prices[::step]
-
-    labels = []
-    values = []
-    for ts, price in sampled:
+def _build_candlestick_chart(symbol, ohlc_data):
+    """Generate a candlestick chart image using mplfinance."""
+    # Convert to DataFrame
+    rows = []
+    for entry in ohlc_data:
+        ts, o, h, l, c = entry
         dt = datetime.fromtimestamp(ts / 1000, tz=timezone.utc)
-        labels.append(dt.strftime("%d/%m"))
-        values.append(round(price, 2))
+        rows.append({"Date": dt, "Open": o, "High": h, "Low": l, "Close": c})
 
-    chart_config = {
-        "type": "line",
-        "data": {
-            "labels": labels,
-            "datasets": [{
-                "label": f"{coin_symbol.upper()} (USD)",
-                "data": values,
-                "borderColor": "#00d4aa",
-                "backgroundColor": "rgba(0,212,170,0.1)",
-                "fill": True,
-                "tension": 0.3,
-                "pointRadius": 0,
-            }]
-        },
-        "options": {
-            "plugins": {
-                "legend": {"labels": {"color": "#ffffff", "font": {"size": 14}}},
-            },
-            "scales": {
-                "x": {
-                    "ticks": {"color": "#aaaaaa", "maxTicksLimit": 7},
-                    "grid": {"color": "rgba(255,255,255,0.1)"},
-                },
-                "y": {
-                    "ticks": {"color": "#aaaaaa"},
-                    "grid": {"color": "rgba(255,255,255,0.1)"},
-                },
-            },
-        },
-    }
+    df = pd.DataFrame(rows)
+    df.set_index("Date", inplace=True)
 
-    config_str = json.dumps(chart_config)
-    encoded = urllib.parse.quote(config_str)
-    return f"https://quickchart.io/chart?bkg=%231a1a2e&width=600&height=400&c={encoded}"
+    # Dark style matching TradingView
+    mc = mpf.make_marketcolors(
+        up="#26a69a", down="#ef5350",
+        edge={"up": "#26a69a", "down": "#ef5350"},
+        wick={"up": "#26a69a", "down": "#ef5350"},
+    )
+    style = mpf.make_mpf_style(
+        base_mpf_style="nightclouds",
+        marketcolors=mc,
+        facecolor="#131722",
+        edgecolor="#131722",
+        gridcolor="#1e222d",
+        gridstyle="-",
+        y_on_right=True,
+        rc={"font.size": 10},
+    )
+
+    # Generate chart
+    buf = io.BytesIO()
+    fig, axes = mpf.plot(
+        df,
+        type="candle",
+        style=style,
+        title=f"\n{symbol.upper()}/USDT",
+        ylabel="",
+        figsize=(10, 6),
+        returnfig=True,
+    )
+    fig.savefig(buf, format="png", dpi=100, bbox_inches="tight",
+                facecolor="#131722", edgecolor="none")
+    buf.seek(0)
+    image_bytes = buf.read()
+    matplotlib.pyplot.close(fig)
+    return image_bytes
 
 
 def get_chart_image(symbol="btc", days=7):
-    """Get chart image bytes for a coin. Returns (image_bytes, caption) or (None, error_msg)."""
+    """Get candlestick chart image bytes. Returns (image_bytes, caption) or (None, error_msg)."""
     symbol = symbol.lower().strip()
     coin_id = SYMBOL_TO_ID.get(symbol)
     if not coin_id:
         available = ", ".join(s.upper() for s in SYMBOL_TO_ID)
         return None, f"לא מכיר את {symbol.upper()}. אפשר: {available}"
 
-    prices = _fetch_price_history(coin_id, days)
-    if not prices:
+    ohlc_data = _fetch_ohlc(coin_id, days)
+    if not ohlc_data:
         return None, f"⚠️ לא הצלחתי לטעון נתונים עבור {symbol.upper()}"
 
-    chart_url = _build_chart_url(symbol, prices)
-
     try:
-        image_bytes = http_get(chart_url, timeout=20)
-        caption = f"📊 {symbol.upper()} | {days} ימים אחרונים"
+        image_bytes = _build_candlestick_chart(symbol, ohlc_data)
+        caption = f"📊 {symbol.upper()}/USDT | {days} ימים אחרונים"
         return image_bytes, caption
     except Exception as e:
+        print(f"  ⚠️  Chart generation: {e}")
         return None, f"⚠️ שגיאה ביצירת גרף: {e}"
 
 
