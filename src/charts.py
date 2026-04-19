@@ -4,6 +4,7 @@ Returns chart image bytes to send via Telegram sendPhoto.
 """
 
 import json
+import os
 import urllib.parse
 from datetime import datetime, timezone
 
@@ -15,7 +16,9 @@ SYMBOL_TO_ID = {sym.lower(): cg_id for cg_id, sym in COIN_SYMBOLS}
 
 def _fetch_price_history(coin_id, days=7):
     """Fetch price history from CoinGecko."""
-    url = f"https://api.coingecko.com/api/v3/coins/{coin_id}/market_chart?vs_currency=usd&days={days}"
+    cg_key = os.environ.get("COINGECKO_API_KEY", "")
+    key_param = f"&x_cg_demo_api_key={cg_key}" if cg_key else ""
+    url = f"https://api.coingecko.com/api/v3/coins/{coin_id}/market_chart?vs_currency=usd&days={days}{key_param}"
     try:
         data = json.loads(http_get(url))
         return data.get("prices", [])

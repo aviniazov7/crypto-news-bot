@@ -4,6 +4,7 @@ Extracted from the original main.py pipeline.
 """
 
 import json
+import os
 import urllib.request
 import urllib.parse
 import xml.etree.ElementTree as ET
@@ -139,7 +140,11 @@ def fetch_all_news():
 # ── CoinGecko Prices ───────────────────────────────────────────────
 
 def fetch_prices():
-    url = f"https://api.coingecko.com/api/v3/simple/price?ids={COINS}&vs_currencies=usd&include_24hr_change=true"
+    cg_key = os.environ.get("COINGECKO_API_KEY", "")
+    if cg_key:
+        url = f"https://api.coingecko.com/api/v3/simple/price?ids={COINS}&vs_currencies=usd&include_24hr_change=true&x_cg_demo_api_key={cg_key}"
+    else:
+        url = f"https://api.coingecko.com/api/v3/simple/price?ids={COINS}&vs_currencies=usd&include_24hr_change=true"
     try:
         return json.loads(http_get(url))
     except Exception as e:
