@@ -72,7 +72,11 @@ def summarize_news(news_items):
     except urllib.error.HTTPError as e:
         body = e.read().decode() if e.fp else ""
         print(f"  ⚠️  Gemini API HTTP {e.code}: {body[:300]}")
-        return f"⚠️ Gemini HTTP {e.code}: {body[:200]}"
+        if e.code == 429:
+            return "⚠️ מכסת Gemini נגמרה — נסה שוב בעוד דקה"
+        if e.code in (401, 403):
+            return "⚠️ מפתח Gemini לא תקין — בדוק GEMINI_API_KEY"
+        return f"⚠️ שגיאה בסיכום AI (HTTP {e.code})"
     except Exception as e:
         print(f"  ⚠️  Gemini API: {e}")
-        return f"⚠️ Gemini error: {e}"
+        return "⚠️ שגיאה בסיכום AI — נסה שוב מאוחר יותר"
