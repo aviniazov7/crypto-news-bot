@@ -100,3 +100,17 @@ def set_chat_id(chat_id):
         data = _load()
         data["chat_id"] = str(chat_id)
         _save(data)
+
+
+def get_topic_id():
+    """Get the saved topic ID."""
+    data = _load()
+    return data.get("topic_id", "")
+
+
+def set_topic_id(topic_id):
+    """Save the target topic ID."""
+    with _lock:
+        data = _load()
+        data["topic_id"] = str(topic_id)
+        _save(data)

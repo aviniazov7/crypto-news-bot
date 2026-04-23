@@ -17,7 +17,6 @@ import storage
 # ── Config ──────────────────────────────────────────────────────────
 TELEGRAM_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "")
 ADMIN_ID = os.environ.get("ADMIN_ID", "")
-TOPIC_ID = os.environ.get("TOPIC_ID", "")  # forum topic ID (optional)
 POLL_INTERVAL = 1
 TWITTER_CHECK_INTERVAL = 300   # 5 minutes
 BRIEFING_INTERVAL = 14400      # 4 hours
@@ -42,24 +41,24 @@ def tg_request(method, payload=None):
         return {}
 
 
-def send_message(chat_id, text, topic_id=None):
+def send_message(chat_id, text):
     payload = {
         "chat_id": chat_id,
         "text": text,
         "disable_web_page_preview": True,
     }
-    tid = topic_id or TOPIC_ID
-    if tid:
-        payload["message_thread_id"] = int(tid)
+    topic_id = storage.get_topic_id()
+    if topic_id:
+        payload["message_thread_id"] = int(topic_id)
     return tg_request("sendMessage", payload)
 
 def set_bot_commands():
     commands = [
-        {"command": "start", "description": "סטטוס הבוט"},
-        {"command": "send", "description": "שלח סקירה עכשיו"},
-        {"command": "list", "description": "חשבונות טוויטר במעקב"},
-        {"command": "add", "description": "הוסף מעקב טוויטר"},
-        {"command": "remove", "description": "הסר מעקב טוויטר"},
+        {"command": "start", "description": "Bot status & setup"},
+        {"command": "send", "description": "Send briefing now"},
+        {"command": "list", "description": "Tracked Twitter accounts"},
+        {"command": "add", "description": "Track a Twitter account"},
+        {"command": "remove", "description": "Untrack a Twitter account"},
     ]
     tg_request("setMyCommands", {"commands": commands})
 
@@ -71,59 +70,60 @@ def is_admin(msg):
 
 # ── Command Handlers (admin only) ──────────────────────────────────
 
-def handle_start(chat_id):
-    R = "\u200F"
-    # save this chat as the target for auto-sending
+def handle_start(chat_id, topic_id=None):
+    # save this chat (and topic) as the target for auto-sending
     storage.set_chat_id(chat_id)
+    if topic_id:
+        storage.set_topic_id(topic_id)
     accounts = storage.list_accounts()
-    acc_text = ", ".join(f"@{a}" for a in accounts) if accounts else "אין"
+    acc_text = ", ".join(f"@{a}" for a in accounts) if accounts else "None"
     text = (
-        f"{R}🤖 Crypto News Bot מוכן!\n\n"
-        f"{R}📡 סקירה אוטומטית כל 4 שעות לצ'אט הזה\n"
-        f"{R}🐦 מעקב טוויטר: {acc_text}\n\n"
-        f"{R}פקודות:\n"
-        f"{R}/list — חשבונות במעקב\n"
-        f"{R}/add @handle — הוסף מעקב\n"
-        f"{R}/remove @handle — הסר מעקב\n"
-        f"{R}/send — שלח סקירה עכשיו"
+        "🤖 Crypto News Bot — Ready!\n\n"
+        f"📡 Auto-briefing every 4h to this chat\n"
+        f"🐦 Tracking: {acc_text}\n\n"
+        "━━━━━━━━━━━━━━━━━━━\n"
+        "📋 Admin Commands:\n"
+        "/send — Send briefing now\n"
+        "/list — Tracked accounts\n"
+        "/add @handle — Track account\n"
+        "/remove @handle — Untrack\n"
+        "━━━━━━━━━━━━━━━━━━━\n"
+        "🔗 Send any x.com link to auto-track"
     )
     send_message(chat_id, text)
 
 
 def handle_add_twitter(chat_id, handle):
-    R = "\u200F"
     if storage.add_account(handle):
         twitter.init_account(handle)
-        send_message(chat_id, f"{R}✅ מעקב אחרי @{handle} הופעל!")
+        send_message(chat_id, f"✅ Now tracking @{handle}")
     else:
-        send_message(chat_id, f"{R}ℹ️ כבר עוקב אחרי @{handle}")
+        send_message(chat_id, f"ℹ️ Already tracking @{handle}")
 
 
 def handle_remove_twitter(chat_id, text):
-    R = "\u200F"
     parts = text.split(maxsplit=1)
     if len(parts) < 2:
-        send_message(chat_id, f"{R}שימוש: /remove @username")
+        send_message(chat_id, "Usage: /remove @username")
         return
     handle = parts[1].strip().lstrip("@").lower()
     if storage.remove_account(handle):
-        send_message(chat_id, f"{R}✅ הפסקתי לעקוב אחרי @{handle}")
+        send_message(chat_id, f"✅ Stopped tracking @{handle}")
     else:
-        send_message(chat_id, f"{R}⚠️ @{handle} לא נמצא ברשימת המעקב")
+        send_message(chat_id, f"⚠️ @{handle} is not tracked")
 
 
 def handle_twitter_list(chat_id):
-    R = "\u200F"
     accounts = storage.list_accounts()
     if not accounts:
-        send_message(chat_id, f"{R}🐦 אין חשבונות במעקב\n\n{R}להוספה: /add @username")
+        send_message(chat_id, "🐦 No tracked accounts\n\nUse /add @username to start tracking")
     else:
-        lines = [f"{R}🐦 חשבונות במעקב:", ""]
+        lines = ["🐦 Tracked Accounts:", ""]
         for acc in accounts:
-            lines.append(f"{R}  • @{acc}")
+            lines.append(f"  • @{acc}")
         lines.append("")
-        lines.append(f"{R}להוספה: /add @username")
-        lines.append(f"{R}להסרה: /remove @username")
+        lines.append("Add: /add @username")
+        lines.append("Remove: /remove @username")
         send_message(chat_id, "\n".join(lines))
 
 # ── Message Processing ─────────────────────────────────────────────
@@ -133,13 +133,14 @@ def process_message(msg):
         return
 
     chat_id = msg["chat"]["id"]
+    topic_id = msg.get("message_thread_id")
     text = msg.get("text", "").strip()
     if not text:
         return
 
     cmd = text.split()[0].lower()
     if cmd in ("/start", "/start@cryptonewsbot"):
-        handle_start(chat_id)
+        handle_start(chat_id, topic_id)
     elif cmd in ("/list", "/list@cryptonewsbot", "/twitter", "/twitter@cryptonewsbot"):
         handle_twitter_list(chat_id)
     elif cmd in ("/add", "/add@cryptonewsbot"):
@@ -207,8 +208,6 @@ class CryptoBot:
         print("🚀 Crypto News Bot starting (auto-send mode)...")
         set_bot_commands()
         print(f"📡 Briefing every {BRIEFING_INTERVAL // 3600}h | Twitter check every {TWITTER_CHECK_INTERVAL // 60}min")
-        if TOPIC_ID:
-            print(f"📌 Sending to topic {TOPIC_ID}")
 
         self.last_briefing = time.time()
         self.last_twitter_check = time.time()
