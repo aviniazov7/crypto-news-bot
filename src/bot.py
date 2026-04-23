@@ -207,11 +207,15 @@ def process_message(msg):
     elif cmd == "/remove":
         handle_remove_twitter(chat_id, text, topic_id)
     elif cmd == "/send":
-        send_message(chat_id, "📨 Sending briefing...", topic_id)
+        status = send_message(chat_id, "📨 Sending briefing...", topic_id)
         try:
             send_auto_briefing()
         except Exception as e:
             send_message(chat_id, f"⚠️ Error sending briefing: {e}", topic_id)
+        # delete the "Sending..." message
+        msg_id = status.get("result", {}).get("message_id")
+        if msg_id:
+            tg_request("deleteMessage", {"chat_id": chat_id, "message_id": msg_id})
     elif cmd == "/groups":
         handle_groups(chat_id, topic_id)
     elif cmd == "/enable":
@@ -278,6 +282,7 @@ class CryptoBot:
 
         print("🚀 Crypto News Bot starting (auto-send mode)...")
         set_bot_commands()
+        self._clear_pending()
         print(f"📡 Briefing every {BRIEFING_INTERVAL // 3600}h | Twitter check every {TWITTER_CHECK_INTERVAL // 60}min")
 
         self.last_briefing = time.time()
@@ -295,6 +300,14 @@ class CryptoBot:
             except Exception as e:
                 print(f"⚠️  Main loop error: {e}")
                 time.sleep(5)
+
+    def _clear_pending(self):
+        """Skip old updates queued while bot was offline."""
+        result = tg_request("getUpdates", {"offset": 0, "timeout": 0})
+        updates = result.get("result", [])
+        if updates:
+            self.offset = updates[-1]["update_id"] + 1
+            print(f"⏭️  Skipped {len(updates)} pending update(s)")
 
     def _poll(self):
         result = tg_request("getUpdates", {"offset": self.offset, "timeout": 30})
