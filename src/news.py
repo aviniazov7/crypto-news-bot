@@ -217,7 +217,6 @@ def build_briefing(news, prices):
             L.append("")
 
     L.append(f"{R}╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌")
-    L.append(f"{R}🤖 סקירה אוטומטית • כל 4 שעות")
 
     return "\n".join(L)
 
