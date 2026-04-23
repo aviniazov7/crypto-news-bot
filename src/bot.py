@@ -184,6 +184,9 @@ def handle_delgroup(chat_id, text, topic_id=None):
 # ── Message Processing ─────────────────────────────────────────────
 
 def process_message(msg):
+    # skip messages older than 30 seconds (prevents duplicates on restart)
+    if time.time() - msg.get("date", 0) > 30:
+        return
     if not is_admin(msg):
         return
 
@@ -282,7 +285,6 @@ class CryptoBot:
 
         print("🚀 Crypto News Bot starting (auto-send mode)...")
         set_bot_commands()
-        self._clear_pending()
         print(f"📡 Briefing every {BRIEFING_INTERVAL // 3600}h | Twitter check every {TWITTER_CHECK_INTERVAL // 60}min")
 
         self.last_briefing = time.time()
@@ -300,14 +302,6 @@ class CryptoBot:
             except Exception as e:
                 print(f"⚠️  Main loop error: {e}")
                 time.sleep(5)
-
-    def _clear_pending(self):
-        """Skip old updates queued while bot was offline."""
-        result = tg_request("getUpdates", {"offset": 0, "timeout": 0})
-        updates = result.get("result", [])
-        if updates:
-            self.offset = updates[-1]["update_id"] + 1
-            print(f"⏭️  Skipped {len(updates)} pending update(s)")
 
     def _poll(self):
         result = tg_request("getUpdates", {"offset": self.offset, "timeout": 30})
