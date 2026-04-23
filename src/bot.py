@@ -18,6 +18,7 @@ import storage
 TELEGRAM_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "")
 CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID", "")
 ADMIN_ID = os.environ.get("ADMIN_ID", "")
+TOPIC_ID = os.environ.get("TOPIC_ID", "")  # forum topic ID (optional)
 POLL_INTERVAL = 1
 TWITTER_CHECK_INTERVAL = 300   # 5 minutes
 BRIEFING_INTERVAL = 14400      # 4 hours
@@ -42,13 +43,26 @@ def tg_request(method, payload=None):
         return {}
 
 
-def send_message(chat_id, text):
+def send_message(chat_id, text, topic_id=None):
     payload = {
         "chat_id": chat_id,
         "text": text,
         "disable_web_page_preview": True,
     }
+    tid = topic_id or TOPIC_ID
+    if tid:
+        payload["message_thread_id"] = int(tid)
     return tg_request("sendMessage", payload)
+
+def set_bot_commands():
+    commands = [
+        {"command": "start", "description": "סטטוס הבוט"},
+        {"command": "send", "description": "שלח סקירה עכשיו"},
+        {"command": "list", "description": "חשבונות טוויטר במעקב"},
+        {"command": "add", "description": "הוסף מעקב טוויטר"},
+        {"command": "remove", "description": "הסר מעקב טוויטר"},
+    ]
+    tg_request("setMyCommands", {"commands": commands})
 
 # ── Admin Check ─────────────────────────────────────────────────────
 
@@ -181,7 +195,10 @@ class CryptoBot:
             print("⚠️  No ADMIN_ID set — bot will ignore all commands")
 
         print("🚀 Crypto News Bot starting (auto-send mode)...")
+        set_bot_commands()
         print(f"📡 Briefing every {BRIEFING_INTERVAL // 3600}h | Twitter check every {TWITTER_CHECK_INTERVAL // 60}min")
+        if TOPIC_ID:
+            print(f"📌 Sending to topic {TOPIC_ID}")
 
         self.last_briefing = time.time()
         self.last_twitter_check = time.time()
