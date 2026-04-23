@@ -194,31 +194,31 @@ def process_message(msg):
     if not text:
         return
 
-    cmd = text.split()[0].lower()
-    if cmd in ("/start", "/start@cryptonewsbot", "/setup", "/setup@cryptonewsbot"):
+    cmd = text.split()[0].lower().split("@")[0]  # strip @botname
+    if cmd in ("/start", "/setup"):
         handle_start(chat_id, topic_id, chat_name)
-    elif cmd in ("/list", "/list@cryptonewsbot", "/twitter", "/twitter@cryptonewsbot"):
+    elif cmd in ("/list", "/twitter"):
         handle_twitter_list(chat_id, topic_id)
-    elif cmd in ("/add", "/add@cryptonewsbot"):
+    elif cmd == "/add":
         parts = text.split(maxsplit=1)
         if len(parts) >= 2:
             handle = parts[1].strip().lstrip("@").lower()
             handle_add_twitter(chat_id, handle, topic_id)
-    elif cmd in ("/remove", "/remove@cryptonewsbot"):
+    elif cmd == "/remove":
         handle_remove_twitter(chat_id, text, topic_id)
-    elif cmd in ("/send", "/send@cryptonewsbot"):
+    elif cmd == "/send":
         send_message(chat_id, "📨 Sending briefing...", topic_id)
         try:
             send_auto_briefing()
         except Exception as e:
             send_message(chat_id, f"⚠️ Error sending briefing: {e}", topic_id)
-    elif cmd in ("/groups", "/groups@cryptonewsbot"):
+    elif cmd == "/groups":
         handle_groups(chat_id, topic_id)
-    elif cmd in ("/enable", "/enable@cryptonewsbot"):
+    elif cmd == "/enable":
         handle_enable(chat_id, text, topic_id)
-    elif cmd in ("/disable", "/disable@cryptonewsbot"):
+    elif cmd == "/disable":
         handle_disable(chat_id, text, topic_id)
-    elif cmd in ("/delgroup", "/delgroup@cryptonewsbot"):
+    elif cmd == "/delgroup":
         handle_delgroup(chat_id, text, topic_id)
     # Twitter link detection
     elif "twitter.com/" in text or "x.com/" in text:
