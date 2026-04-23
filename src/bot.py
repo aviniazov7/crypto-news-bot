@@ -41,13 +41,12 @@ def tg_request(method, payload=None):
         return {}
 
 
-def send_message(chat_id, text):
+def send_message(chat_id, text, topic_id=None):
     payload = {
         "chat_id": chat_id,
         "text": text,
         "disable_web_page_preview": True,
     }
-    topic_id = storage.get_topic_id()
     if topic_id:
         payload["message_thread_id"] = int(topic_id)
     return tg_request("sendMessage", payload)
@@ -59,6 +58,7 @@ def set_bot_commands():
         {"command": "list", "description": "Tracked Twitter accounts"},
         {"command": "add", "description": "Track a Twitter account"},
         {"command": "remove", "description": "Untrack a Twitter account"},
+        {"command": "groups", "description": "Manage groups"},
     ]
     tg_request("setMyCommands", {"commands": commands})
 
@@ -70,11 +70,8 @@ def is_admin(msg):
 
 # ── Command Handlers (admin only) ──────────────────────────────────
 
-def handle_start(chat_id, topic_id=None):
-    # save this chat (and topic) as the target for auto-sending
-    storage.set_chat_id(chat_id)
-    if topic_id:
-        storage.set_topic_id(topic_id)
+def handle_start(chat_id, topic_id=None, chat_name=""):
+    storage.add_group(chat_id, name=chat_name, topic_id=topic_id)
     accounts = storage.list_accounts()
     acc_text = ", ".join(f"@{a}" for a in accounts) if accounts else "None"
     text = (
@@ -87,36 +84,37 @@ def handle_start(chat_id, topic_id=None):
         "/list — Tracked accounts\n"
         "/add @handle — Track account\n"
         "/remove @handle — Untrack\n"
+        "/groups — Manage groups\n"
         "━━━━━━━━━━━━━━━━━━━\n"
         "🔗 Send any x.com link to auto-track"
     )
-    send_message(chat_id, text)
+    send_message(chat_id, text, topic_id)
 
 
-def handle_add_twitter(chat_id, handle):
+def handle_add_twitter(chat_id, handle, topic_id=None):
     if storage.add_account(handle):
         twitter.init_account(handle)
-        send_message(chat_id, f"✅ Now tracking @{handle}")
+        send_message(chat_id, f"✅ Now tracking @{handle}", topic_id)
     else:
-        send_message(chat_id, f"ℹ️ Already tracking @{handle}")
+        send_message(chat_id, f"ℹ️ Already tracking @{handle}", topic_id)
 
 
-def handle_remove_twitter(chat_id, text):
+def handle_remove_twitter(chat_id, text, topic_id=None):
     parts = text.split(maxsplit=1)
     if len(parts) < 2:
-        send_message(chat_id, "Usage: /remove @username")
+        send_message(chat_id, "Usage: /remove @username", topic_id)
         return
     handle = parts[1].strip().lstrip("@").lower()
     if storage.remove_account(handle):
-        send_message(chat_id, f"✅ Stopped tracking @{handle}")
+        send_message(chat_id, f"✅ Stopped tracking @{handle}", topic_id)
     else:
-        send_message(chat_id, f"⚠️ @{handle} is not tracked")
+        send_message(chat_id, f"⚠️ @{handle} is not tracked", topic_id)
 
 
-def handle_twitter_list(chat_id):
+def handle_twitter_list(chat_id, topic_id=None):
     accounts = storage.list_accounts()
     if not accounts:
-        send_message(chat_id, "🐦 No tracked accounts\n\nUse /add @username to start tracking")
+        send_message(chat_id, "🐦 No tracked accounts\n\nUse /add @username to start tracking", topic_id)
     else:
         lines = ["🐦 Tracked Accounts:", ""]
         for acc in accounts:
@@ -124,7 +122,64 @@ def handle_twitter_list(chat_id):
         lines.append("")
         lines.append("Add: /add @username")
         lines.append("Remove: /remove @username")
-        send_message(chat_id, "\n".join(lines))
+        send_message(chat_id, "\n".join(lines), topic_id)
+
+
+def handle_groups(chat_id, topic_id=None):
+    groups = storage.list_groups()
+    if not groups:
+        send_message(chat_id, "No groups registered.\n\nUse /start in a group to add it.", topic_id)
+        return
+    lines = ["📡 Registered Groups:", ""]
+    for gid, info in groups.items():
+        status = "✅" if info.get("enabled", True) else "❌"
+        name = info.get("name") or "Unknown"
+        tid = info.get("topic_id", "")
+        lines.append(f"  {status} {name}")
+        lines.append(f"      ID: {gid}")
+        if tid:
+            lines.append(f"      Topic: {tid}")
+    lines.append("")
+    lines.append("Enable:  /enable <group_id>")
+    lines.append("Disable: /disable <group_id>")
+    lines.append("Remove:  /delgroup <group_id>")
+    send_message(chat_id, "\n".join(lines), topic_id)
+
+
+def handle_enable(chat_id, text, topic_id=None):
+    parts = text.split(maxsplit=1)
+    if len(parts) < 2:
+        send_message(chat_id, "Usage: /enable <group_id>", topic_id)
+        return
+    gid = parts[1].strip()
+    if storage.set_group_enabled(gid, True):
+        send_message(chat_id, f"✅ Group {gid} enabled", topic_id)
+    else:
+        send_message(chat_id, f"⚠️ Group {gid} not found", topic_id)
+
+
+def handle_disable(chat_id, text, topic_id=None):
+    parts = text.split(maxsplit=1)
+    if len(parts) < 2:
+        send_message(chat_id, "Usage: /disable <group_id>", topic_id)
+        return
+    gid = parts[1].strip()
+    if storage.set_group_enabled(gid, False):
+        send_message(chat_id, f"❌ Group {gid} disabled", topic_id)
+    else:
+        send_message(chat_id, f"⚠️ Group {gid} not found", topic_id)
+
+
+def handle_delgroup(chat_id, text, topic_id=None):
+    parts = text.split(maxsplit=1)
+    if len(parts) < 2:
+        send_message(chat_id, "Usage: /delgroup <group_id>", topic_id)
+        return
+    gid = parts[1].strip()
+    if storage.remove_group(gid):
+        send_message(chat_id, f"✅ Group {gid} removed", topic_id)
+    else:
+        send_message(chat_id, f"⚠️ Group {gid} not found", topic_id)
 
 # ── Message Processing ─────────────────────────────────────────────
 
@@ -134,40 +189,56 @@ def process_message(msg):
 
     chat_id = msg["chat"]["id"]
     topic_id = msg.get("message_thread_id")
+    chat_name = msg["chat"].get("title", "Private")
     text = msg.get("text", "").strip()
     if not text:
         return
 
     cmd = text.split()[0].lower()
     if cmd in ("/start", "/start@cryptonewsbot"):
-        handle_start(chat_id, topic_id)
+        handle_start(chat_id, topic_id, chat_name)
     elif cmd in ("/list", "/list@cryptonewsbot", "/twitter", "/twitter@cryptonewsbot"):
-        handle_twitter_list(chat_id)
+        handle_twitter_list(chat_id, topic_id)
     elif cmd in ("/add", "/add@cryptonewsbot"):
         parts = text.split(maxsplit=1)
         if len(parts) >= 2:
             handle = parts[1].strip().lstrip("@").lower()
-            handle_add_twitter(chat_id, handle)
+            handle_add_twitter(chat_id, handle, topic_id)
     elif cmd in ("/remove", "/remove@cryptonewsbot"):
-        handle_remove_twitter(chat_id, text)
+        handle_remove_twitter(chat_id, text, topic_id)
     elif cmd in ("/send", "/send@cryptonewsbot"):
-        send_auto_briefing()
+        send_message(chat_id, "📨 Sending briefing...", topic_id)
+        try:
+            send_auto_briefing()
+        except Exception as e:
+            send_message(chat_id, f"⚠️ Error sending briefing: {e}", topic_id)
+    elif cmd in ("/groups", "/groups@cryptonewsbot"):
+        handle_groups(chat_id, topic_id)
+    elif cmd in ("/enable", "/enable@cryptonewsbot"):
+        handle_enable(chat_id, text, topic_id)
+    elif cmd in ("/disable", "/disable@cryptonewsbot"):
+        handle_disable(chat_id, text, topic_id)
+    elif cmd in ("/delgroup", "/delgroup@cryptonewsbot"):
+        handle_delgroup(chat_id, text, topic_id)
     # Twitter link detection
     elif "twitter.com/" in text or "x.com/" in text:
         detected = twitter.extract_handle_from_url(text)
         if detected:
-            handle_add_twitter(chat_id, detected)
+            handle_add_twitter(chat_id, detected, topic_id)
 
 # ── Scheduled Tasks ────────────────────────────────────────────────
 
-def get_target_chat():
-    """Get the target chat ID from storage."""
-    return storage.get_chat_id()
+def send_to_all_groups(text):
+    """Send a message to all enabled groups."""
+    groups = storage.get_enabled_groups()
+    for chat_id, topic_id in groups:
+        send_message(chat_id, text, topic_id or None)
+        time.sleep(0.3)
 
 
 def check_twitter_feeds():
-    chat_id = get_target_chat()
-    if not chat_id:
+    groups = storage.get_enabled_groups()
+    if not groups:
         return
     new_tweets = twitter.check_all_accounts()
     if not new_tweets:
@@ -175,20 +246,20 @@ def check_twitter_feeds():
     for handle, tweets in new_tweets.items():
         for tweet in tweets:
             msg = twitter.format_tweet_message(tweet)
-            send_message(chat_id, msg)
+            send_to_all_groups(msg)
             time.sleep(0.5)
 
 
 def send_auto_briefing():
-    chat_id = get_target_chat()
-    if not chat_id:
-        print("⚠️  No target chat set — send /start in a group first")
+    groups = storage.get_enabled_groups()
+    if not groups:
+        print("⚠️  No groups registered — send /start in a group first")
         return
     print("📨 Sending auto-briefing...")
     prices = news.fetch_prices()
     items = news.fetch_all_news()
     msg = news.build_briefing(items, prices)
-    send_message(chat_id, msg)
+    send_to_all_groups(msg)
 
 # ── Main Bot Loop ──────────────────────────────────────────────────
 
