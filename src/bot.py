@@ -53,7 +53,7 @@ def send_message(chat_id, text, topic_id=None):
 
 def set_bot_commands():
     commands = [
-        {"command": "start", "description": "Bot status & setup"},
+        {"command": "setup", "description": "Register this chat"},
         {"command": "send", "description": "Send briefing now"},
         {"command": "list", "description": "Tracked Twitter accounts"},
         {"command": "add", "description": "Track a Twitter account"},
@@ -195,7 +195,7 @@ def process_message(msg):
         return
 
     cmd = text.split()[0].lower()
-    if cmd in ("/start", "/start@cryptonewsbot"):
+    if cmd in ("/start", "/start@cryptonewsbot", "/setup", "/setup@cryptonewsbot"):
         handle_start(chat_id, topic_id, chat_name)
     elif cmd in ("/list", "/list@cryptonewsbot", "/twitter", "/twitter@cryptonewsbot"):
         handle_twitter_list(chat_id, topic_id)
