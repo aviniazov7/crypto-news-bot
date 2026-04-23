@@ -184,8 +184,8 @@ def handle_delgroup(chat_id, text, topic_id=None):
 # ── Message Processing ─────────────────────────────────────────────
 
 def process_message(msg):
-    # skip messages older than 30 seconds (prevents duplicates on restart)
-    if time.time() - msg.get("date", 0) > 30:
+    # skip messages older than 2 minutes (prevents duplicates on restart)
+    if time.time() - msg.get("date", 0) > 120:
         return
     if not is_admin(msg):
         return
