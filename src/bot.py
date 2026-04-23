@@ -16,7 +16,6 @@ import storage
 
 # ── Config ──────────────────────────────────────────────────────────
 TELEGRAM_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "")
-CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID", "")
 ADMIN_ID = os.environ.get("ADMIN_ID", "")
 TOPIC_ID = os.environ.get("TOPIC_ID", "")  # forum topic ID (optional)
 POLL_INTERVAL = 1
@@ -74,13 +73,15 @@ def is_admin(msg):
 
 def handle_start(chat_id):
     R = "\u200F"
+    # save this chat as the target for auto-sending
+    storage.set_chat_id(chat_id)
     accounts = storage.list_accounts()
     acc_text = ", ".join(f"@{a}" for a in accounts) if accounts else "אין"
     text = (
-        f"{R}🤖 Crypto News Bot\n\n"
-        f"{R}📡 סקירה אוטומטית כל 4 שעות\n"
+        f"{R}🤖 Crypto News Bot מוכן!\n\n"
+        f"{R}📡 סקירה אוטומטית כל 4 שעות לצ'אט הזה\n"
         f"{R}🐦 מעקב טוויטר: {acc_text}\n\n"
-        f"{R}פקודות אדמין:\n"
+        f"{R}פקודות:\n"
         f"{R}/list — חשבונות במעקב\n"
         f"{R}/add @handle — הוסף מעקב\n"
         f"{R}/remove @handle — הסר מעקב\n"
@@ -158,23 +159,35 @@ def process_message(msg):
 
 # ── Scheduled Tasks ────────────────────────────────────────────────
 
+def get_target_chat():
+    """Get the target chat ID from storage."""
+    return storage.get_chat_id()
+
+
 def check_twitter_feeds():
+    chat_id = get_target_chat()
+    if not chat_id:
+        return
     new_tweets = twitter.check_all_accounts()
     if not new_tweets:
         return
     for handle, tweets in new_tweets.items():
         for tweet in tweets:
             msg = twitter.format_tweet_message(tweet)
-            send_message(CHAT_ID, msg)
+            send_message(chat_id, msg)
             time.sleep(0.5)
 
 
 def send_auto_briefing():
+    chat_id = get_target_chat()
+    if not chat_id:
+        print("⚠️  No target chat set — send /start in a group first")
+        return
     print("📨 Sending auto-briefing...")
     prices = news.fetch_prices()
     items = news.fetch_all_news()
     msg = news.build_briefing(items, prices)
-    send_message(CHAT_ID, msg)
+    send_message(chat_id, msg)
 
 # ── Main Bot Loop ──────────────────────────────────────────────────
 
@@ -187,9 +200,6 @@ class CryptoBot:
     def run(self):
         if not TELEGRAM_TOKEN:
             print("❌ Missing TELEGRAM_BOT_TOKEN")
-            sys.exit(1)
-        if not CHAT_ID:
-            print("❌ Missing TELEGRAM_CHAT_ID")
             sys.exit(1)
         if not ADMIN_ID:
             print("⚠️  No ADMIN_ID set — bot will ignore all commands")

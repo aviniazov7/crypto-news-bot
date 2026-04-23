@@ -86,3 +86,17 @@ def mark_seen(handle, tweet_id):
             if len(seen_list) > MAX_SEEN_PER_ACCOUNT:
                 data["seen"][handle] = seen_list[-MAX_SEEN_PER_ACCOUNT:]
             _save(data)
+
+
+def get_chat_id():
+    """Get the saved target chat ID."""
+    data = _load()
+    return data.get("chat_id", "")
+
+
+def set_chat_id(chat_id):
+    """Save the target chat ID."""
+    with _lock:
+        data = _load()
+        data["chat_id"] = str(chat_id)
+        _save(data)
