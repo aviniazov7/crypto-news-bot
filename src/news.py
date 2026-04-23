@@ -21,10 +21,12 @@ RSS_FEEDS = [
     {"name": "Decrypt",          "url": "https://decrypt.co/feed"},
 ]
 
-COINS = "bitcoin,ethereum,solana,binancecoin,ripple"
+COINS = "bitcoin,ethereum,binancecoin,solana,ripple,cardano,dogecoin,tron,avalanche-2,chainlink"
 COIN_SYMBOLS = [
-    ("bitcoin", "BTC"), ("ethereum", "ETH"), ("solana", "SOL"),
-    ("binancecoin", "BNB"), ("ripple", "XRP"),
+    ("bitcoin", "BTC"), ("ethereum", "ETH"), ("binancecoin", "BNB"),
+    ("solana", "SOL"), ("ripple", "XRP"), ("cardano", "ADA"),
+    ("dogecoin", "DOGE"), ("tron", "TRX"), ("avalanche-2", "AVAX"),
+    ("chainlink", "LINK"),
 ]
 HOURS_BACK = 8
 MAX_PER_SOURCE = 3
