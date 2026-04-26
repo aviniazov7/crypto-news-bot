@@ -1,38 +1,59 @@
 """
-Simple JSON file persistence for Twitter account tracking.
-Stores tracked accounts and seen tweet IDs to avoid duplicates.
+Persistent storage using Render environment variables.
+Data survives deploys by saving to Render API as an env var.
+Falls back to local file for development.
 """
 
 import json
 import os
 import threading
+import urllib.request
 
-DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data")
-TRACKING_FILE = os.path.join(DATA_DIR, "tracking.json")
-MAX_SEEN_PER_ACCOUNT = 100  # keep last N tweet IDs per account
+RENDER_API_KEY = os.environ.get("RENDER_API_KEY", "")
+RENDER_SERVICE_ID = os.environ.get("RENDER_SERVICE_ID", "")
+ENV_VAR_KEY = "TRACKING_DATA"
+MAX_SEEN_PER_ACCOUNT = 100
 
 _lock = threading.Lock()
-
-
-def _ensure_dir():
-    os.makedirs(DATA_DIR, exist_ok=True)
+_cache = None  # in-memory cache
 
 
 def _load():
-    _ensure_dir()
-    if not os.path.exists(TRACKING_FILE):
-        return {"accounts": [], "seen": {}}
-    try:
-        with open(TRACKING_FILE, "r", encoding="utf-8") as f:
-            return json.load(f)
-    except (json.JSONDecodeError, IOError):
-        return {"accounts": [], "seen": {}}
+    global _cache
+    if _cache is not None:
+        return _cache
+
+    # Read from env var (injected by Render on boot)
+    raw = os.environ.get(ENV_VAR_KEY, "")
+    if raw:
+        try:
+            _cache = json.loads(raw)
+            return _cache
+        except json.JSONDecodeError:
+            pass
+
+    _cache = {"accounts": [], "seen": {}, "groups": {}}
+    return _cache
 
 
 def _save(data):
-    _ensure_dir()
-    with open(TRACKING_FILE, "w", encoding="utf-8") as f:
-        json.dump(data, f, indent=2, ensure_ascii=False)
+    global _cache
+    _cache = data
+
+    if not RENDER_API_KEY or not RENDER_SERVICE_ID:
+        return  # local dev: skip API call
+
+    # Persist to Render env var via API
+    url = f"https://api.render.com/v1/services/{RENDER_SERVICE_ID}/env-vars/{ENV_VAR_KEY}"
+    payload = json.dumps({"value": json.dumps(data, ensure_ascii=False)}).encode("utf-8")
+    req = urllib.request.Request(url, data=payload, method="PUT", headers={
+        "Authorization": f"Bearer {RENDER_API_KEY}",
+        "Content-Type": "application/json",
+    })
+    try:
+        urllib.request.urlopen(req, timeout=10)
+    except Exception as e:
+        print(f"  ⚠️  Failed to persist data: {e}")
 
 
 def add_account(handle):
@@ -82,7 +103,6 @@ def mark_seen(handle, tweet_id):
         seen_list = data["seen"].setdefault(handle, [])
         if tweet_id not in seen_list:
             seen_list.append(tweet_id)
-            # trim old entries
             if len(seen_list) > MAX_SEEN_PER_ACCOUNT:
                 data["seen"][handle] = seen_list[-MAX_SEEN_PER_ACCOUNT:]
             _save(data)
