@@ -28,11 +28,15 @@ def _load():
     if raw:
         try:
             _cache = json.loads(raw)
-            return _cache
         except json.JSONDecodeError:
-            pass
+            _cache = {}
+    else:
+        _cache = {}
 
-    _cache = {"accounts": [], "seen": {}, "groups": {}}
+    # Ensure required keys always exist
+    _cache.setdefault("accounts", [])
+    _cache.setdefault("seen", {})
+    _cache.setdefault("groups", {})
     return _cache
 
 
