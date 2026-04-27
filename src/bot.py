@@ -60,7 +60,14 @@ def set_bot_commands():
         {"command": "remove", "description": "Untrack a Twitter account"},
         {"command": "groups", "description": "Manage groups"},
     ]
-    tg_request("setMyCommands", {"commands": commands})
+    # Remove commands for all users (default scope)
+    tg_request("deleteMyCommands", {})
+    # Set commands only for the admin in private chat
+    if ADMIN_ID:
+        tg_request("setMyCommands", {
+            "commands": commands,
+            "scope": {"type": "chat", "chat_id": int(ADMIN_ID)},
+        })
 
 # ── Admin Check ─────────────────────────────────────────────────────
 
