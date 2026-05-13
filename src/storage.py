@@ -14,30 +14,26 @@ RENDER_SERVICE_ID = os.environ.get("RENDER_SERVICE_ID", "")
 ENV_VAR_KEY = "TRACKING_DATA"
 MAX_SEEN_PER_ACCOUNT = 100
 
-_lock = threading.Lock()
+_lock = threading.RLock()
 _cache = None  # in-memory cache
 
 
 def _load():
     global _cache
-    if _cache is not None:
+    with _lock:
+        if _cache is None:
+            raw = os.environ.get(ENV_VAR_KEY, "")
+            if raw:
+                try:
+                    _cache = json.loads(raw)
+                except json.JSONDecodeError:
+                    _cache = {}
+            else:
+                _cache = {}
+            _cache.setdefault("accounts", [])
+            _cache.setdefault("seen", {})
+            _cache.setdefault("groups", {})
         return _cache
-
-    # Read from env var (injected by Render on boot)
-    raw = os.environ.get(ENV_VAR_KEY, "")
-    if raw:
-        try:
-            _cache = json.loads(raw)
-        except json.JSONDecodeError:
-            _cache = {}
-    else:
-        _cache = {}
-
-    # Ensure required keys always exist
-    _cache.setdefault("accounts", [])
-    _cache.setdefault("seen", {})
-    _cache.setdefault("groups", {})
-    return _cache
 
 
 def _save(data):

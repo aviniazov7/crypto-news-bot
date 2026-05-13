@@ -17,7 +17,6 @@ import storage
 # ── Config ──────────────────────────────────────────────────────────
 TELEGRAM_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "")
 ADMIN_ID = os.environ.get("ADMIN_ID", "")
-POLL_INTERVAL = 1
 TWITTER_CHECK_INTERVAL = 300   # 5 minutes
 BRIEFING_INTERVAL = 14400      # 4 hours
 ISRAEL_TZ = timezone(timedelta(hours=3))
@@ -99,11 +98,18 @@ def handle_start(chat_id, topic_id=None, chat_name=""):
 
 
 def handle_add_twitter(chat_id, handle, topic_id=None):
-    if storage.add_account(handle):
-        twitter.init_account(handle)
-        send_message(chat_id, f"✅ Now tracking @{handle}", topic_id)
-    else:
+    if handle in storage.list_accounts():
         send_message(chat_id, f"ℹ️ Already tracking @{handle}", topic_id)
+        return
+    if not twitter.init_account(handle):
+        send_message(
+            chat_id,
+            f"⚠️ Couldn't reach @{handle} — all Nitter mirrors failed or the handle doesn't exist. Try again later.",
+            topic_id,
+        )
+        return
+    storage.add_account(handle)
+    send_message(chat_id, f"✅ Now tracking @{handle}", topic_id)
 
 
 def handle_remove_twitter(chat_id, text, topic_id=None):
