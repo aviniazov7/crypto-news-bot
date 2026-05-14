@@ -198,7 +198,6 @@ def build_briefing(news, prices):
         L.append("")
 
     if news:
-        L.append(f"{R}╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌")
         L.append(f"{R}📰 מה חדש היום:")
         L.append("")
 
@@ -215,8 +214,6 @@ def build_briefing(news, prices):
 
             L.append(f"{R}   [{item['source']}]")
             L.append("")
-
-    L.append(f"{R}╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌")
 
     return "\n".join(L)
 
