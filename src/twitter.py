@@ -81,31 +81,43 @@ def _to_direct_twimg_url(url):
     return direct
 
 
+def _strip_news_prefix(text):
+    """Drop English news-flash prefixes that Google Translate leaves untranslated."""
+    return re.sub(
+        r"^\s*(JUST\s+IN:?|BREAKING:?|UPDATE:?|NEW:?|DEVELOPING:?|EXCLUSIVE:?|ALERT:?)\s*",
+        "",
+        (text or "").strip(),
+        flags=re.IGNORECASE,
+    )
+
+
 def _extract_media(html_desc):
     """Extract media (videos/photos) from a Nitter RSS description HTML blob.
 
-    Order matters: videos first (with mp4 src or <source>), then a video
-    poster image as a fallback for HLS-only tweets, then standalone images.
-    Returns a list of {"type": "video"|"photo", "url": "..."}.
+    Scans for any URL pointing at MP4 (video) or at Twitter/Nitter image hosts
+    (Twitter CDN paths or nitter /pic/ proxies) — more forgiving than parsing
+    specific tags, since Nitter's HTML varies. Maps everything back to direct
+    pbs.twimg.com URLs at high quality.
     """
     media = []
+    skip = ("emoji", "profile_image", "profile_banner")
 
-    for m in re.finditer(r'<video[^>]*\bsrc=["\']([^"\']+\.mp4[^"\']*)["\']', html_desc, re.IGNORECASE):
-        media.append({"type": "video", "url": m.group(1)})
-    for m in re.finditer(r'<source[^>]*\bsrc=["\']([^"\']+\.mp4[^"\']*)["\']', html_desc, re.IGNORECASE):
-        media.append({"type": "video", "url": m.group(1)})
-
-    if not media:
-        for m in re.finditer(r'<video[^>]*\bposter=["\']([^"\']+)["\']', html_desc, re.IGNORECASE):
-            media.append({"type": "photo", "url": _to_direct_twimg_url(m.group(1))})
+    for m in re.finditer(r'https?://[^\s"\'<>]+\.mp4[^\s"\'<>]*', html_desc, re.IGNORECASE):
+        media.append({"type": "video", "url": m.group(0)})
 
     if not media:
-        skip = ("emoji", "profile_image", "profile_banner")
-        for m in re.finditer(r'<img[^>]*\bsrc=["\']([^"\']+)["\']', html_desc, re.IGNORECASE):
-            url = m.group(1)
+        seen_urls = set()
+        for m in re.finditer(r'https?://[^\s"\'<>]+', html_desc):
+            url = m.group(0)
+            if not ("/pic/" in url or "pbs.twimg.com" in url):
+                continue
             if any(s in url for s in skip):
                 continue
-            media.append({"type": "photo", "url": _to_direct_twimg_url(url)})
+            direct = _to_direct_twimg_url(url)
+            if direct in seen_urls:
+                continue
+            seen_urls.add(direct)
+            media.append({"type": "photo", "url": direct})
 
     return media
 
@@ -113,6 +125,28 @@ def _extract_media(html_desc):
 def _strip_media_placeholder(text):
     """Drop the trailing "Video"/"Image"/"GIF" word Nitter appends in descriptions."""
     return re.sub(r"\s*\b(Video|Image|GIF)\s*$", "", text, flags=re.IGNORECASE).strip()
+
+
+_MEDIA_NS = {"media": "http://search.yahoo.com/mrss/"}
+
+
+def _media_from_xml_item(item):
+    """Pull media URLs from <media:content> and <enclosure> elements as a fallback."""
+    media = []
+    for mc in item.findall("media:content", _MEDIA_NS):
+        url = mc.get("url", "")
+        if not url:
+            continue
+        kind = "video" if mc.get("medium") == "video" or url.lower().endswith(".mp4") else "photo"
+        media.append({"type": kind, "url": _to_direct_twimg_url(url)})
+    for enc in item.findall("enclosure"):
+        url = enc.get("url", "")
+        if not url:
+            continue
+        t = enc.get("type", "")
+        kind = "video" if t.startswith("video") or url.lower().endswith(".mp4") else "photo"
+        media.append({"type": kind, "url": _to_direct_twimg_url(url)})
+    return media
 
 
 def _parse_tweets(handle, xml_text):
@@ -128,7 +162,7 @@ def _parse_tweets(handle, xml_text):
         link = item.findtext("link", "").strip()
         raw_desc = unescape(item.findtext("description", ""))
         desc = _strip_media_placeholder(clean_html(raw_desc))
-        media = _extract_media(raw_desc)
+        media = _extract_media(raw_desc) or _media_from_xml_item(item)
         pub = parse_date(item.findtext("pubDate", ""))
 
         if not title and not desc:
@@ -192,7 +226,7 @@ def check_all_accounts():
 def format_tweet_message(tweet):
     """Format a tweet for Telegram."""
     R = "\u200F"
-    raw_text = (tweet.get("text") or "").strip()
+    raw_text = _strip_news_prefix(tweet.get("text") or "")
     text_he = translate_he(raw_text[:500]) if raw_text else ""
 
     date_str = ""
