@@ -228,19 +228,7 @@ def format_tweet_message(tweet):
     R = "\u200F"
     raw_text = _strip_news_prefix(tweet.get("text") or "")
     text_he = translate_he(raw_text[:500]) if raw_text else ""
-
-    date_str = ""
-    pub = tweet.get("date")
-    if pub:
-        dt = pub.astimezone(ISRAEL_TZ) if pub.tzinfo else pub.replace(tzinfo=timezone.utc).astimezone(ISRAEL_TZ)
-        date_str = dt.strftime("%d.%m.%Y  %H:%M")
-
-    lines = []
-    if date_str:
-        lines.append(f"{R}🕐 {date_str}")
-        lines.append("")
-    lines.append(f"{R}{text_he or '(ללא טקסט)'}")
-    return "\n".join(lines)
+    return f"{R}{text_he or '(ללא טקסט)'}"
 
 
 def init_account(handle):
