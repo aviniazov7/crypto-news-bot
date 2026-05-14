@@ -112,6 +112,28 @@ def handle_add_twitter(chat_id, handle, topic_id=None):
     send_message(chat_id, f"✅ Now tracking @{handle}", topic_id)
 
 
+def handle_send_tweet_from_url(chat_id, url, topic_id=None):
+    """Fetch a specific tweet by URL and broadcast it (Hebrew, formatted) to all groups."""
+    parts = twitter.extract_tweet_from_url(url)
+    if not parts:
+        return False
+    handle, tweet_id = parts
+    send_message(chat_id, "📥 מושך את הציוץ ומתרגם לעברית...", topic_id)
+    tweet = twitter.fetch_tweet_by_id(handle, tweet_id)
+    if not tweet:
+        send_message(
+            chat_id,
+            f"⚠️ לא הצלחתי למשוך את הציוץ של @{handle}. ייתכן שהוא ישן מדי בעדכון של Nitter, או שכל המראות נכשלו.",
+            topic_id,
+        )
+        return True
+    storage.mark_seen(handle, tweet["id"])  # don't re-send if account is tracked
+    msg = twitter.format_tweet_message(tweet)
+    send_to_all_groups(msg)
+    send_message(chat_id, "✅ נשלח לכל הקבוצות", topic_id)
+    return True
+
+
 def handle_remove_twitter(chat_id, text, topic_id=None):
     parts = text.split(maxsplit=1)
     if len(parts) < 2:
@@ -242,6 +264,10 @@ def process_message(msg):
         handle_delgroup(chat_id, text, topic_id)
     # Twitter link detection
     elif "twitter.com/" in text or "x.com/" in text:
+        # Specific tweet URL (.../status/123) → fetch and broadcast the tweet itself
+        if "/status/" in text and handle_send_tweet_from_url(chat_id, text, topic_id):
+            return
+        # Profile URL → start tracking the account
         detected = twitter.extract_handle_from_url(text)
         if detected:
             handle_add_twitter(chat_id, detected, topic_id)

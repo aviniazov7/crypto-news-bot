@@ -5,10 +5,13 @@ Checks tracked accounts for new tweets and returns them for forwarding.
 
 import re
 import xml.etree.ElementTree as ET
+from datetime import timedelta, timezone
 from html import unescape
 
 from news import http_get, clean_html, parse_date, translate_he
 import storage
+
+ISRAEL_TZ = timezone(timedelta(hours=3))
 
 NITTER_INSTANCES = [
     "https://nitter.privacydev.net",
@@ -27,6 +30,26 @@ def extract_handle_from_url(text):
         if handle.lower() in ("home", "explore", "search", "settings", "i", "intent"):
             return None
         return handle.lower()
+    return None
+
+
+def extract_tweet_from_url(text):
+    """If the URL points to a specific tweet, return (handle, tweet_id). Otherwise None."""
+    m = re.search(r"(?:twitter\.com|x\.com)/(@?[\w]+)/status/(\d+)", text, re.IGNORECASE)
+    if m:
+        return m.group(1).lstrip("@").lower(), m.group(2)
+    return None
+
+
+def fetch_tweet_by_id(handle, tweet_id):
+    """Look up a specific tweet in the handle's Nitter RSS feed."""
+    xml_text = _fetch_nitter_rss(handle)
+    if not xml_text:
+        return None
+    tweets = _parse_tweets(handle, xml_text)
+    for t in tweets:
+        if tweet_id in (t.get("link") or "") or tweet_id in (t.get("id") or ""):
+            return t
     return None
 
 
@@ -114,12 +137,27 @@ def check_all_accounts():
 def format_tweet_message(tweet):
     """Format a tweet for Telegram."""
     R = "\u200F"
-    text_he = translate_he(tweet["text"][:280])
+    raw_text = (tweet.get("text") or "").strip()
+    text_he = translate_he(raw_text[:500]) if raw_text else ""
+
+    date_str = ""
+    pub = tweet.get("date")
+    if pub:
+        dt = pub.astimezone(ISRAEL_TZ) if pub.tzinfo else pub.replace(tzinfo=timezone.utc).astimezone(ISRAEL_TZ)
+        date_str = dt.strftime("%d.%m.%Y  %H:%M")
+
     lines = [
-        f"{R}🐦 @{tweet['handle']}",
-        f"{R}{text_he}",
-        f"{R}🔗 {tweet['link']}",
+        f"{R}🐦 ציוץ חדש",
+        f"{R}━━━━━━━━━━━━━━━━━━━",
+        f"{R}👤 @{tweet['handle']}",
     ]
+    if date_str:
+        lines.append(f"{R}🕐 {date_str}")
+    lines.append("")
+    lines.append(f"{R}{text_he or '(ללא טקסט)'}")
+    lines.append("")
+    lines.append(f"{R}━━━━━━━━━━━━━━━━━━━")
+    lines.append(f"{R}🔗 {tweet['link']}")
     return "\n".join(lines)
 
 
