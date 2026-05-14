@@ -84,7 +84,14 @@ def _clean_rss_desc(desc, title, source):
     if title and desc.lower().startswith(title.lower()):
         desc = desc[len(title):].strip()
     desc = re.sub(
-        r"(?:The\s+post|Post|Article)\s+.+?appeared first on.*$",
+        r"(?:The\s+post|Post|Article)\s+.+?(?:appeared first on|first appeared on).*$",
+        "",
+        desc,
+        flags=re.IGNORECASE | re.DOTALL,
+    ).strip()
+    # Also catch "Originally published by/on/at ..." footers
+    desc = re.sub(
+        r"\bOriginally\s+(?:published|appeared)\s+(?:by|on|at|in)\b.*$",
         "",
         desc,
         flags=re.IGNORECASE | re.DOTALL,
@@ -275,7 +282,7 @@ def build_briefing(news, prices):
 
         dom = fetch_btc_dominance()
         if dom is not None:
-            L.append(f"{R}👑 שליטת BTC: {dom:.1f}%")
+            L.append(f"{R}🪙 BTC Dominance: {dom:.1f}%")
         L.append("")
 
         for cg_id, sym in COIN_SYMBOLS:
