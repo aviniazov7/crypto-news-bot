@@ -4,6 +4,7 @@ Checks tracked accounts for new tweets and returns them for forwarding.
 """
 
 import re
+import urllib.parse
 import xml.etree.ElementTree as ET
 from datetime import timedelta, timezone
 from html import unescape
@@ -68,6 +69,49 @@ def _fetch_nitter_rss(handle):
     return None
 
 
+def _to_direct_twimg_url(url):
+    """Map a Nitter /pic/ proxy URL to the original pbs.twimg.com URL."""
+    m = re.match(r"https?://[^/]+/pic/(?:orig/)?(.+)$", url)
+    if not m:
+        return url
+    path = urllib.parse.unquote(m.group(1))
+    return f"https://pbs.twimg.com/{path}"
+
+
+def _extract_media(html_desc):
+    """Extract media (videos/photos) from a Nitter RSS description HTML blob.
+
+    Order matters: videos first (with mp4 src or <source>), then a video
+    poster image as a fallback for HLS-only tweets, then standalone images.
+    Returns a list of {"type": "video"|"photo", "url": "..."}.
+    """
+    media = []
+
+    for m in re.finditer(r'<video[^>]*\bsrc=["\']([^"\']+\.mp4[^"\']*)["\']', html_desc, re.IGNORECASE):
+        media.append({"type": "video", "url": m.group(1)})
+    for m in re.finditer(r'<source[^>]*\bsrc=["\']([^"\']+\.mp4[^"\']*)["\']', html_desc, re.IGNORECASE):
+        media.append({"type": "video", "url": m.group(1)})
+
+    if not media:
+        for m in re.finditer(r'<video[^>]*\bposter=["\']([^"\']+)["\']', html_desc, re.IGNORECASE):
+            media.append({"type": "photo", "url": _to_direct_twimg_url(m.group(1))})
+
+    if not media:
+        skip = ("emoji", "profile_image", "profile_banner")
+        for m in re.finditer(r'<img[^>]*\bsrc=["\']([^"\']+)["\']', html_desc, re.IGNORECASE):
+            url = m.group(1)
+            if any(s in url for s in skip):
+                continue
+            media.append({"type": "photo", "url": _to_direct_twimg_url(url)})
+
+    return media
+
+
+def _strip_media_placeholder(text):
+    """Drop the trailing "Video"/"Image"/"GIF" word Nitter appends in descriptions."""
+    return re.sub(r"\s*\b(Video|Image|GIF)\s*$", "", text, flags=re.IGNORECASE).strip()
+
+
 def _parse_tweets(handle, xml_text):
     """Parse Nitter RSS XML into tweet dicts."""
     try:
@@ -79,7 +123,9 @@ def _parse_tweets(handle, xml_text):
     for item in root.findall(".//item"):
         title = unescape(item.findtext("title", "").strip())
         link = item.findtext("link", "").strip()
-        desc = clean_html(unescape(item.findtext("description", "")))
+        raw_desc = unescape(item.findtext("description", ""))
+        desc = _strip_media_placeholder(clean_html(raw_desc))
+        media = _extract_media(raw_desc)
         pub = parse_date(item.findtext("pubDate", ""))
 
         if not title and not desc:
@@ -101,6 +147,7 @@ def _parse_tweets(handle, xml_text):
             "text": desc if desc else title,
             "link": x_link,
             "date": pub,
+            "media": media,
         })
 
     return tweets
@@ -146,18 +193,11 @@ def format_tweet_message(tweet):
         dt = pub.astimezone(ISRAEL_TZ) if pub.tzinfo else pub.replace(tzinfo=timezone.utc).astimezone(ISRAEL_TZ)
         date_str = dt.strftime("%d.%m.%Y  %H:%M")
 
-    lines = [
-        f"{R}🐦 ציוץ חדש",
-        f"{R}━━━━━━━━━━━━━━━━━━━",
-        f"{R}👤 @{tweet['handle']}",
-    ]
+    lines = [f"{R}🐦 @{tweet['handle']}"]
     if date_str:
         lines.append(f"{R}🕐 {date_str}")
     lines.append("")
     lines.append(f"{R}{text_he or '(ללא טקסט)'}")
-    lines.append("")
-    lines.append(f"{R}━━━━━━━━━━━━━━━━━━━")
-    lines.append(f"{R}🔗 {tweet['link']}")
     return "\n".join(lines)
 
 
