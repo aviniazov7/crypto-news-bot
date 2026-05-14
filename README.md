@@ -25,26 +25,46 @@ Every 4 hours, this bot automatically:
 
 ## How It Works
 
-```
-GitHub Actions (cron every 4h)
-         │
-         ▼
-┌─────────────────┐
-│  Ubuntu VM      │  ← GitHub spins up a free VM
-│  Python 3.12    │
-│                 │
-│  1. RSS feeds ──┼──→ CoinDesk, CoinTelegraph, etc.
-│  2. CoinGecko ──┼──→ BTC, ETH, SOL prices
-│  3. Translate ──┼──→ Google Translate → Hebrew
-│  4. Send ───────┼──→ Telegram Bot API → Your phone
-│                 │
-└─────────────────┘
-         │
-         ▼
-      VM shuts down (done in ~30 sec)
+```mermaid
+flowchart TD
+    loop["♾️ Main loop<br/>(Render worker)"] --> poll & sched
+
+    %% Telegram inbound
+    poll["📥 Telegram getUpdates<br/>long-poll 30s"] --> dispatch
+    dispatch{{"Update type"}}
+    dispatch -- "message" --> cmds["process_message<br/>admin-only"]
+    dispatch -- "my_chat_member" --> autoreg["Auto-register group<br/>(or cleanup on kick)"]
+    cmds --> handlers["/send · /add · /list<br/>/setup · x.com link"]
+
+    %% Scheduled ticks
+    sched{{"Scheduled tick"}}
+    sched -- "every 5 min" --> twcheck
+    sched -- "every 4 h" --> briefing
+
+    %% Twitter pipeline
+    twcheck["check_twitter_feeds"] --> nitter
+    nitter["🐦 Nitter RSS<br/>(4 mirrors, fallback)"] --> parse
+    parse["_parse_tweets<br/>extract media · strip prefixes"] --> dedup
+    dedup["seen-IDs<br/>+ word-overlap dedup"] --> bcast
+
+    %% Briefing pipeline
+    briefing["send_auto_briefing"] --> sources
+    sources["💰 CoinGecko prices<br/>😨 Fear & Greed Index<br/>👑 BTC dominance<br/>📰 5 RSS news feeds"] --> build
+    build["build_briefing<br/>smart mood · translate · AI summary"] --> bcast
+
+    %% Output
+    handlers --> bcast
+    bcast["📡 fan-out to enabled groups"] --> tg["📱 Telegram<br/>sendMessage · sendPhoto · sendVideo"]
+
+    %% Storage
+    store[("📦 Render env var<br/>TRACKING_DATA<br/>accounts · groups · seen · recent_texts")]
+    autoreg --> store
+    store -. read .-> handlers
+    store -. read .-> bcast
+    store -. read/write .-> dedup
 ```
 
-Your computer is NOT involved. Everything runs on GitHub's servers.
+The bot runs as a single Python worker on Render. The main loop interleaves Telegram long-polling with two scheduled jobs (Twitter check every 5 min, briefing every 4 h). State persists across deploys by writing `TRACKING_DATA` back to a Render env var via the Render API.
 
 ## Project Structure
 
