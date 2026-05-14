@@ -73,6 +73,21 @@ def translate_he(text):
         return text
 
 
+def smart_trim(text, max_len=400):
+    """Trim text to max_len, ending at a sentence or word boundary if possible."""
+    if len(text) <= max_len:
+        return text
+    snippet = text[:max_len]
+    for marker in (". ", "! ", "? "):
+        idx = snippet.rfind(marker)
+        if idx > max_len * 0.6:
+            return snippet[: idx + 1]
+    idx = snippet.rfind(" ")
+    if idx > max_len * 0.6:
+        return snippet[:idx]
+    return snippet
+
+
 def wrap_text(text, width=38):
     words = text.split()
     lines, current = [], ""
@@ -105,8 +120,7 @@ def scrape_feed(feed, cutoff):
             continue
         if pub and pub < cutoff:
             continue
-        if len(desc) > 300:
-            desc = desc[:297] + "..."
+        desc = smart_trim(desc, 400)
         items.append({"title": title, "desc": desc, "source": feed["name"], "date": pub})
     if not items:
         ns = {"a": "http://www.w3.org/2005/Atom"}
@@ -120,8 +134,7 @@ def scrape_feed(feed, cutoff):
                 continue
             if pub and pub < cutoff:
                 continue
-            if len(summary) > 300:
-                summary = summary[:297] + "..."
+            summary = smart_trim(summary, 400)
             items.append({"title": title, "desc": summary, "source": feed["name"], "date": pub})
     return items[:MAX_PER_SOURCE]
 
@@ -261,16 +274,16 @@ def build_briefing(news, prices):
 
         for i, item in enumerate(news[:5], 1):
             title_he = translate_he(item["title"])
-            if len(title_he) > 85:
-                title_he = title_he[:82] + "..."
             L.append(f"{R}{i}. {title_he}")
 
-            if item.get("desc") and len(item["desc"]) > 30:
-                desc_he = translate_he(item["desc"])
-                for line in wrap_text(desc_he, 42)[:4]:
-                    L.append(f"{R}   {line}")
+            desc = (item.get("desc") or "").strip()
+            # Bitcoin Magazine etc. prepend their name to RSS descriptions; drop that.
+            if desc and item.get("source") and desc.lower().startswith(item["source"].lower()):
+                desc = desc[len(item["source"]):].strip()
+            if desc and len(desc) > 30:
+                desc_he = translate_he(desc)
+                L.append(f"{R}   {desc_he}")
 
-            L.append(f"{R}   [{item['source']}]")
             L.append("")
 
         if GEMINI_API_KEY:
@@ -329,16 +342,15 @@ def build_news_message(news):
 
     for i, item in enumerate(news[:5], 1):
         title_he = translate_he(item["title"])
-        if len(title_he) > 85:
-            title_he = title_he[:82] + "..."
         L.append(f"{R}{i}. {title_he}")
 
-        if item.get("desc") and len(item["desc"]) > 30:
-            desc_he = translate_he(item["desc"])
-            for line in wrap_text(desc_he, 42)[:4]:
-                L.append(f"{R}   {line}")
+        desc = (item.get("desc") or "").strip()
+        if desc and item.get("source") and desc.lower().startswith(item["source"].lower()):
+            desc = desc[len(item["source"]):].strip()
+        if desc and len(desc) > 30:
+            desc_he = translate_he(desc)
+            L.append(f"{R}   {desc_he}")
 
-        L.append(f"{R}   [{item['source']}]")
         L.append("")
 
     return "\n".join(L)
