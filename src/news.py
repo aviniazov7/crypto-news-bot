@@ -162,20 +162,19 @@ def fetch_prices():
 
 
 def fetch_fear_greed():
-    """Crypto Fear & Greed Index (0–100) from alternative.me. Returns (value, label_he)."""
-    labels_he = {
-        "Extreme Fear": "פחד קיצוני 🔴",
-        "Fear": "פחד 🟠",
-        "Neutral": "ניטרלי 🟡",
-        "Greed": "תאוות בצע 🟢",
-        "Extreme Greed": "תאוות בצע קיצונית 🟢",
-    }
+    """Crypto Fear & Greed Index (0–100). Returns (value, color_emoji)."""
     try:
         data = json.loads(http_get("https://api.alternative.me/fng/?limit=1"))
-        item = (data.get("data") or [{}])[0]
-        value = int(item.get("value", 0))
-        label = labels_he.get(item.get("value_classification", ""), item.get("value_classification", ""))
-        return value, label
+        value = int((data.get("data") or [{}])[0].get("value", 0))
+        if value <= 25:
+            emoji = "🔴"
+        elif value <= 45:
+            emoji = "🟠"
+        elif value <= 55:
+            emoji = "🟡"
+        else:
+            emoji = "🟢"
+        return value, emoji
     except Exception as e:
         print(f"  ⚠️  Fear&Greed: {e}")
         return None, None
@@ -257,7 +256,7 @@ def build_briefing(news, prices):
 
         fg_value, fg_label = fetch_fear_greed()
         if fg_value is not None:
-            L.append(f"{R}😨 Fear & Greed: {fg_value}/100 — {fg_label}")
+            L.append(f"{R}{fg_label} Fear & Greed: {fg_value}/100")
 
         dom = fetch_btc_dominance()
         if dom is not None:
