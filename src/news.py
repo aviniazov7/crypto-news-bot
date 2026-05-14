@@ -73,6 +73,26 @@ def translate_he(text):
         return text
 
 
+def _clean_rss_desc(desc, title, source):
+    """Strip RSS quirks from a description: source prefix, title duplication,
+    "The post X appeared first on Y" feed signatures, collapse whitespace."""
+    if not desc:
+        return ""
+    desc = desc.strip()
+    if source and desc.lower().startswith(source.lower()):
+        desc = desc[len(source):].strip()
+    if title and desc.lower().startswith(title.lower()):
+        desc = desc[len(title):].strip()
+    desc = re.sub(
+        r"(?:The\s+post|Post|Article)\s+.+?appeared first on.*$",
+        "",
+        desc,
+        flags=re.IGNORECASE | re.DOTALL,
+    ).strip()
+    desc = re.sub(r"\s+", " ", desc)
+    return desc
+
+
 def smart_trim(text, max_len=400):
     """Trim text to max_len, ending at a sentence or word boundary if possible."""
     if len(text) <= max_len:
@@ -120,7 +140,7 @@ def scrape_feed(feed, cutoff):
             continue
         if pub and pub < cutoff:
             continue
-        desc = smart_trim(desc, 400)
+        desc = smart_trim(_clean_rss_desc(desc, title, feed["name"]), 400)
         items.append({"title": title, "desc": desc, "source": feed["name"], "date": pub})
     if not items:
         ns = {"a": "http://www.w3.org/2005/Atom"}
@@ -134,7 +154,7 @@ def scrape_feed(feed, cutoff):
                 continue
             if pub and pub < cutoff:
                 continue
-            summary = smart_trim(summary, 400)
+            summary = smart_trim(_clean_rss_desc(summary, title, feed["name"]), 400)
             items.append({"title": title, "desc": summary, "source": feed["name"], "date": pub})
     return items[:MAX_PER_SOURCE]
 
@@ -277,9 +297,6 @@ def build_briefing(news, prices):
             L.append(f"{R}{i}. {title_he}")
 
             desc = (item.get("desc") or "").strip()
-            # Bitcoin Magazine etc. prepend their name to RSS descriptions; drop that.
-            if desc and item.get("source") and desc.lower().startswith(item["source"].lower()):
-                desc = desc[len(item["source"]):].strip()
             if desc and len(desc) > 30:
                 desc_he = translate_he(desc)
                 L.append(f"{R}   {desc_he}")
@@ -345,8 +362,6 @@ def build_news_message(news):
         L.append(f"{R}{i}. {title_he}")
 
         desc = (item.get("desc") or "").strip()
-        if desc and item.get("source") and desc.lower().startswith(item["source"].lower()):
-            desc = desc[len(item["source"]):].strip()
         if desc and len(desc) > 30:
             desc_he = translate_he(desc)
             L.append(f"{R}   {desc_he}")
