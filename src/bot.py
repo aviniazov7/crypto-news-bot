@@ -50,6 +50,50 @@ def send_message(chat_id, text, topic_id=None):
         payload["message_thread_id"] = int(topic_id)
     return tg_request("sendMessage", payload)
 
+
+def send_photo(chat_id, photo_url, caption=None, topic_id=None):
+    payload = {"chat_id": chat_id, "photo": photo_url}
+    if caption:
+        payload["caption"] = caption[:1024]  # Telegram caption limit
+    if topic_id:
+        payload["message_thread_id"] = int(topic_id)
+    return tg_request("sendPhoto", payload)
+
+
+def send_video(chat_id, video_url, caption=None, topic_id=None):
+    payload = {"chat_id": chat_id, "video": video_url}
+    if caption:
+        payload["caption"] = caption[:1024]
+    if topic_id:
+        payload["message_thread_id"] = int(topic_id)
+    return tg_request("sendVideo", payload)
+
+
+def send_tweet(chat_id, tweet, topic_id=None):
+    """Send a tweet with attached media if present; fall back to text on failure."""
+    caption = twitter.format_tweet_message(tweet)
+    media = tweet.get("media") or []
+    tid = topic_id or None
+
+    if media:
+        first = media[0]
+        if first["type"] == "video":
+            result = send_video(chat_id, first["url"], caption=caption, topic_id=tid)
+        else:
+            result = send_photo(chat_id, first["url"], caption=caption, topic_id=tid)
+        if result.get("ok"):
+            return result
+        print(f"  ⚠️  Media send failed ({first['type']}): {result.get('description', 'unknown')}")
+
+    return send_message(chat_id, caption, tid)
+
+
+def broadcast_tweet(tweet):
+    """Send a tweet to every enabled group."""
+    for chat_id, topic_id in storage.get_enabled_groups():
+        send_tweet(chat_id, tweet, topic_id or None)
+        time.sleep(0.3)
+
 def set_bot_commands():
     commands = [
         {"command": "setup", "description": "Register this chat"},
@@ -128,8 +172,7 @@ def handle_send_tweet_from_url(chat_id, url, topic_id=None):
         )
         return True
     storage.mark_seen(handle, tweet["id"])  # don't re-send if account is tracked
-    msg = twitter.format_tweet_message(tweet)
-    send_to_all_groups(msg)
+    broadcast_tweet(tweet)
     send_message(chat_id, "✅ נשלח לכל הקבוצות", topic_id)
     return True
 
@@ -336,8 +379,7 @@ def check_twitter_feeds():
         return
     for handle, tweets in new_tweets.items():
         for tweet in tweets:
-            msg = twitter.format_tweet_message(tweet)
-            send_to_all_groups(msg)
+            broadcast_tweet(tweet)
             time.sleep(0.5)
 
 
