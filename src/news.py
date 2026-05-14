@@ -160,10 +160,91 @@ def fetch_prices():
         print(f"  ⚠️  CoinGecko: {e}")
         return {}
 
+
+def fetch_fear_greed():
+    """Crypto Fear & Greed Index (0–100) from alternative.me. Returns (value, label_he)."""
+    labels_he = {
+        "Extreme Fear": "פחד קיצוני 🔴",
+        "Fear": "פחד 🟠",
+        "Neutral": "ניטרלי 🟡",
+        "Greed": "תאוות בצע 🟢",
+        "Extreme Greed": "תאוות בצע קיצונית 🟢",
+    }
+    try:
+        data = json.loads(http_get("https://api.alternative.me/fng/?limit=1"))
+        item = (data.get("data") or [{}])[0]
+        value = int(item.get("value", 0))
+        label = labels_he.get(item.get("value_classification", ""), item.get("value_classification", ""))
+        return value, label
+    except Exception as e:
+        print(f"  ⚠️  Fear&Greed: {e}")
+        return None, None
+
+
+def fetch_btc_dominance():
+    """BTC market-cap dominance % from CoinGecko global. Returns float or None."""
+    try:
+        data = json.loads(http_get("https://api.coingecko.com/api/v3/global", extra_headers=_cg_headers()))
+        return data.get("data", {}).get("market_cap_percentage", {}).get("btc")
+    except Exception as e:
+        print(f"  ⚠️  CG global: {e}")
+        return None
+
+
+def _market_mood(prices):
+    """Pick a nuanced mood line based on BTC vs altcoin behaviour."""
+    if not prices:
+        return "🟡 השוק יציב"
+    btc = prices.get("bitcoin", {}).get("usd_24h_change", 0)
+    alts = [prices[c].get("usd_24h_change", 0) for c in prices if c != "bitcoin"]
+    avg_alts = sum(alts) / len(alts) if alts else 0
+
+    if btc <= -5 and avg_alts <= -5:
+        return "🔴 יום אדום — מכירה רחבה"
+    if btc <= -2 and avg_alts <= -2:
+        return "🟠 השוק בירידה — חלשות רחבה"
+    if avg_alts >= 2 and avg_alts >= btc + 1.5:
+        return "🟢 אלטים מובילים — Risk-On"
+    if btc >= 2 and avg_alts >= 1:
+        return "🟢 השוק ירוק — עליות רחבות"
+    if btc >= 1 and avg_alts <= -0.5:
+        return "🟡 BTC חזק, אלטים בפיגור"
+    if btc <= -0.5 and avg_alts >= 1:
+        return "🟢 אלטים מתעוררים — BTC חלש"
+    if abs(btc - avg_alts) >= 3:
+        return "🟡 שוק מעורב — תנודתיות גבוהה"
+    avg = (btc + avg_alts) / 2
+    if avg >= 0.5:
+        return "🟢 השוק ירוק — תנועה מתונה"
+    if avg <= -0.5:
+        return "🟠 השוק אדום — תנועה מתונה"
+    return "🟡 השוק יציב"
+
+
+_NEWS_KEYWORDS = {
+    "🔴": ("sec ", "lawsuit", "court", "ban", "regulation", "regulator", "fed ",
+           "senate", "congress", "hack", "exploit", "scam", "fraud", "arrest"),
+    "🟢": ("surge", "rally", "soar", "all-time high", "ath", "breakout", "jumps",
+           "skyrocket", "approval", "approves", "etf approval", "milestone"),
+    "🔵": (" ai ", "artificial intelligence", "protocol", "blockchain tech",
+           "layer 2", "rollup", "zero-knowledge"),
+}
+
+
+def _categorize_news(title):
+    """Color-coded importance/category prefix based on keywords in the title."""
+    t = " " + title.lower() + " "
+    for emoji, words in _NEWS_KEYWORDS.items():
+        if any(w in t for w in words):
+            return emoji
+    return "🟡"
+
 # ── Message Building ───────────────────────────────────────────────
 
 def build_briefing(news, prices):
-    """Build the full briefing message (same format as before)."""
+    """Full briefing — mood + Fear&Greed + dominance + prices + categorised news."""
+    from ai_summary import summarize_news, GEMINI_API_KEY
+
     now = datetime.now(ISRAEL_TZ)
     R = "\u200F"
     L = []
@@ -172,19 +253,15 @@ def build_briefing(news, prices):
     L.append("")
 
     if prices:
-        changes = [prices[c].get("usd_24h_change", 0) for c in prices]
-        avg = sum(changes) / len(changes) if changes else 0
-        if avg <= -5:
-            mood = "🔴 יום אדום בשוק — ירידות חדות"
-        elif avg <= -2:
-            mood = "🟠 השוק בירידה מתונה"
-        elif avg <= 0:
-            mood = "🟡 השוק יציב — ירידות קלות"
-        elif avg <= 3:
-            mood = "🟢 השוק ירוק — עליות"
-        else:
-            mood = "🟢 עליות חדות בשוק"
-        L.append(f"{R}{mood}")
+        L.append(f"{R}{_market_mood(prices)}")
+
+        fg_value, fg_label = fetch_fear_greed()
+        if fg_value is not None:
+            L.append(f"{R}😨 Fear & Greed: {fg_value}/100 — {fg_label}")
+
+        dom = fetch_btc_dominance()
+        if dom is not None:
+            L.append(f"{R}👑 שליטת BTC: {dom:.1f}%")
         L.append("")
 
         for cg_id, sym in COIN_SYMBOLS:
@@ -201,11 +278,12 @@ def build_briefing(news, prices):
         L.append(f"{R}📰 מה חדש היום:")
         L.append("")
 
-        for i, item in enumerate(news[:5], 1):
+        for item in news[:5]:
             title_he = translate_he(item["title"])
             if len(title_he) > 85:
                 title_he = title_he[:82] + "..."
-            L.append(f"{R}{i}. {title_he}")
+            emoji = _categorize_news(item["title"])
+            L.append(f"{R}{emoji} {title_he}")
 
             if item.get("desc") and len(item["desc"]) > 30:
                 desc_he = translate_he(item["desc"])
@@ -215,9 +293,13 @@ def build_briefing(news, prices):
             L.append(f"{R}   [{item['source']}]")
             L.append("")
 
+        if GEMINI_API_KEY:
+            summary = summarize_news(news[:5])
+            if summary and not summary.startswith("⚠️"):
+                L.append("")
+                L.append(summary)
+
     return "\n".join(L)
-
-
 def build_prices_message(prices):
     """Build a prices-only message."""
     R = "\u200F"
