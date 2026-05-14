@@ -246,6 +246,44 @@ def process_message(msg):
         if detected:
             handle_add_twitter(chat_id, detected, topic_id)
 
+
+def process_my_chat_member(event):
+    """Auto-register a group when the bot is added, or remove it when kicked.
+
+    Triggered by Telegram `my_chat_member` updates so the admin doesn't need
+    to send /start in the group — useful when other bots in the same group
+    would react to slash commands.
+    """
+    chat = event.get("chat", {})
+    if chat.get("type") not in ("group", "supergroup"):
+        return
+
+    chat_id = chat.get("id")
+    chat_name = chat.get("title", "") or "Unknown"
+    new_status = event.get("new_chat_member", {}).get("status", "")
+    from_id = str(event.get("from", {}).get("id", ""))
+
+    if new_status in ("member", "administrator"):
+        if ADMIN_ID and from_id != ADMIN_ID:
+            print(f"  ⚠️  Bot added to '{chat_name}' ({chat_id}) by non-admin {from_id} — ignoring")
+            return
+        is_new = storage.add_group(chat_id, name=chat_name)
+        if is_new:
+            print(f"✅ Auto-registered group: {chat_name} ({chat_id})")
+            if ADMIN_ID:
+                send_message(
+                    ADMIN_ID,
+                    f"✅ Added to group: {chat_name}\nID: {chat_id}\n\n"
+                    "Briefings will arrive every 4h.\n"
+                    "To pin them to a specific topic in a forum, send "
+                    "/setup@<this_bot> inside that topic.",
+                )
+    elif new_status in ("left", "kicked"):
+        if storage.remove_group(chat_id):
+            print(f"❌ Removed group: {chat_name} ({chat_id})")
+            if ADMIN_ID:
+                send_message(ADMIN_ID, f"❌ Removed from group: {chat_name} ({chat_id})")
+
 # ── Scheduled Tasks ────────────────────────────────────────────────
 
 def send_to_all_groups(text):
@@ -317,7 +355,12 @@ class CryptoBot:
                 time.sleep(5)
 
     def _poll(self):
-        result = tg_request("getUpdates", {"offset": self.offset, "timeout": 30})
+        # `my_chat_member` is not delivered by default — must be in allowed_updates
+        result = tg_request("getUpdates", {
+            "offset": self.offset,
+            "timeout": 30,
+            "allowed_updates": ["message", "my_chat_member"],
+        })
         updates = result.get("result", [])
 
         for update in updates:
@@ -325,6 +368,8 @@ class CryptoBot:
             try:
                 if "message" in update:
                     process_message(update["message"])
+                elif "my_chat_member" in update:
+                    process_my_chat_member(update["my_chat_member"])
             except Exception as e:
                 print(f"  ⚠️  Update error: {e}")
 
