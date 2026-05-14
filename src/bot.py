@@ -240,8 +240,15 @@ def process_message(msg):
     elif cmd == "/add":
         parts = text.split(maxsplit=1)
         if len(parts) >= 2:
-            handle = parts[1].strip().lstrip("@").lower()
-            handle_add_twitter(chat_id, handle, topic_id)
+            arg = parts[1].strip()
+            if "twitter.com/" in arg or "x.com/" in arg:
+                handle = twitter.extract_handle_from_url(arg)
+            else:
+                handle = arg.lstrip("@").lower()
+            if handle:
+                handle_add_twitter(chat_id, handle, topic_id)
+            else:
+                send_message(chat_id, "⚠️ לא הצלחתי לזהות שם משתמש מהקלט", topic_id)
     elif cmd == "/remove":
         handle_remove_twitter(chat_id, text, topic_id)
     elif cmd == "/send":
