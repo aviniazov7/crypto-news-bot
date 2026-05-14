@@ -220,24 +220,6 @@ def _market_mood(prices):
     return "🟡 השוק יציב"
 
 
-_NEWS_KEYWORDS = {
-    "🔴": ("sec ", "lawsuit", "court", "ban", "regulation", "regulator", "fed ",
-           "senate", "congress", "hack", "exploit", "scam", "fraud", "arrest"),
-    "🟢": ("surge", "rally", "soar", "all-time high", "ath", "breakout", "jumps",
-           "skyrocket", "approval", "approves", "etf approval", "milestone"),
-    "🔵": (" ai ", "artificial intelligence", "protocol", "blockchain tech",
-           "layer 2", "rollup", "zero-knowledge"),
-}
-
-
-def _categorize_news(title):
-    """Color-coded importance/category prefix based on keywords in the title."""
-    t = " " + title.lower() + " "
-    for emoji, words in _NEWS_KEYWORDS.items():
-        if any(w in t for w in words):
-            return emoji
-    return "🟡"
-
 # ── Message Building ───────────────────────────────────────────────
 
 def build_briefing(news, prices):
@@ -277,12 +259,11 @@ def build_briefing(news, prices):
         L.append(f"{R}📰 מה חדש היום:")
         L.append("")
 
-        for item in news[:5]:
+        for i, item in enumerate(news[:5], 1):
             title_he = translate_he(item["title"])
             if len(title_he) > 85:
                 title_he = title_he[:82] + "..."
-            emoji = _categorize_news(item["title"])
-            L.append(f"{R}{emoji} {title_he}")
+            L.append(f"{R}{i}. {title_he}")
 
             if item.get("desc") and len(item["desc"]) > 30:
                 desc_he = translate_he(item["desc"])
