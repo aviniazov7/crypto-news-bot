@@ -108,6 +108,54 @@ def mark_seen(handle, tweet_id):
             _save(data)
 
 
+def _word_set(text):
+    """Significant words (>=4 chars) lower-cased — used for similarity matching."""
+    import re
+    return set(re.findall(r"\b[\w]{4,}\b", (text or "").lower()))
+
+
+def has_recent_text(handle, text, threshold=0.5, min_shared=4):
+    """Return True if a recent tweet from this handle covers the same story.
+
+    Uses the overlap coefficient |A∩B| / min(|A|,|B|) so a one-line "Just in:"
+    tweet matches a longer elaboration of the same news, and requires
+    `min_shared` overlapping content words so short headlines that share a
+    common phrase ("hits all-time high") aren't mistaken for duplicates.
+    """
+    handle = handle.lower().strip().lstrip("@")
+    new_words = _word_set(text)
+    if len(new_words) < 3:
+        return False
+    data = _load()
+    for old_text in data.get("recent_texts", {}).get(handle, []):
+        old_words = _word_set(old_text)
+        if not old_words:
+            continue
+        shared = len(new_words & old_words)
+        if shared < min_shared:
+            continue
+        smaller = min(len(new_words), len(old_words))
+        if smaller and (shared / smaller) >= threshold:
+            return True
+    return False
+
+
+def add_recent_text(handle, text):
+    """Record a tweet text (truncated to 200 chars) as recently broadcast."""
+    handle = handle.lower().strip().lstrip("@")
+    if not text or len(text.strip()) < 10:
+        return
+    snippet = text.strip()[:200]
+    with _lock:
+        data = _load()
+        bucket = data.setdefault("recent_texts", {}).setdefault(handle, [])
+        if snippet not in bucket:
+            bucket.append(snippet)
+            if len(bucket) > 20:
+                data["recent_texts"][handle] = bucket[-20:]
+            _save(data)
+
+
 def add_group(chat_id, name="", topic_id=None):
     """Add/update a group. Returns True if newly added."""
     with _lock:

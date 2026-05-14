@@ -70,12 +70,15 @@ def _fetch_nitter_rss(handle):
 
 
 def _to_direct_twimg_url(url):
-    """Map a Nitter /pic/ proxy URL to the original pbs.twimg.com URL."""
+    """Map a Nitter /pic/ proxy URL to the original pbs.twimg.com URL at high quality."""
     m = re.match(r"https?://[^/]+/pic/(?:orig/)?(.+)$", url)
     if not m:
         return url
     path = urllib.parse.unquote(m.group(1))
-    return f"https://pbs.twimg.com/{path}"
+    direct = f"https://pbs.twimg.com/{path}"
+    if "?" not in direct:
+        direct += "?name=large"
+    return direct
 
 
 def _extract_media(html_desc):
@@ -154,7 +157,7 @@ def _parse_tweets(handle, xml_text):
 
 
 def check_account(handle):
-    """Check a single account for new tweets. Returns list of unseen tweets."""
+    """Check a single account for new tweets, skipping near-duplicates by text."""
     xml_text = _fetch_nitter_rss(handle)
     if not xml_text:
         return []
@@ -163,9 +166,14 @@ def check_account(handle):
     new_tweets = []
 
     for tweet in tweets:
-        if not storage.is_seen(handle, tweet["id"]):
-            storage.mark_seen(handle, tweet["id"])
-            new_tweets.append(tweet)
+        if storage.is_seen(handle, tweet["id"]):
+            continue
+        storage.mark_seen(handle, tweet["id"])
+        text = tweet.get("text", "")
+        if storage.has_recent_text(handle, text):
+            continue  # same story re-tweeted in a thread — silently skip
+        storage.add_recent_text(handle, text)
+        new_tweets.append(tweet)
 
     return new_tweets
 
@@ -193,10 +201,10 @@ def format_tweet_message(tweet):
         dt = pub.astimezone(ISRAEL_TZ) if pub.tzinfo else pub.replace(tzinfo=timezone.utc).astimezone(ISRAEL_TZ)
         date_str = dt.strftime("%d.%m.%Y  %H:%M")
 
-    lines = [f"{R}🐦 @{tweet['handle']}"]
+    lines = []
     if date_str:
         lines.append(f"{R}🕐 {date_str}")
-    lines.append("")
+        lines.append("")
     lines.append(f"{R}{text_he or '(ללא טקסט)'}")
     return "\n".join(lines)
 
