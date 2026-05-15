@@ -162,6 +162,36 @@ def is_promotional(text):
     return bool(_PROMO_RE.search(text or ""))
 
 
+_CRYPTO_TERMS = (
+    # core
+    "crypto", "bitcoin", "btc", "ethereum", "eth", "blockchain", "altcoin",
+    "stablecoin", "defi", "memecoin", "satoshi", "halving", "on-chain",
+    "onchain", "web3", "tokeniz", "wallet", "mining", "miner",
+    # major coins / tickers
+    "solana", "$sol", "xrp", "ripple", "$bnb", "binance", "cardano", "$ada",
+    "dogecoin", "$doge", "tron", "$trx", "avalanche", "$avax", "chainlink",
+    "$link", "polkadot", "polygon", "litecoin", "shiba", "pepe", "usdt",
+    "usdc", "tether", "$btc", "$eth",
+    # exchanges / institutions
+    "coinbase", "kraken", "okx", "bybit", "bitget", "microstrategy",
+    "grayscale", "blackrock", "circle",
+    # finance / macro
+    "etf", "sec ", "regulat", "federal reserve", " fed ", "interest rate",
+    "inflation", "recession", "nasdaq", "s&p", "treasury", "liquidat",
+    "leverage", "futures", "bull market", "bear market", "bullish",
+    "bearish", "market cap", "all-time high", "all time high", "rally",
+    "selloff", "sell-off", "dump", "pump", "hodl", "stock market",
+    "wall street", "gdp", "cpi", "fiat",
+)
+
+
+def is_crypto_relevant(text):
+    """True if the tweet mentions a crypto/finance term — used to drop
+    off-topic posts (X algorithm, Grok, generic tech) from tracked accounts."""
+    t = (text or "").lower()
+    return any(term in t for term in _CRYPTO_TERMS)
+
+
 _MEDIA_NS = {"media": "http://search.yahoo.com/mrss/"}
 
 
@@ -241,6 +271,8 @@ def check_account(handle):
         text = tweet.get("text", "")
         if is_promotional(text):
             continue  # skip ads / "join our discord" / airdrop spam
+        if not is_crypto_relevant(text):
+            continue  # skip off-topic posts (X algorithm, Grok, generic tech)
         if storage.has_recent_text(handle, text):
             continue  # same story re-tweeted in a thread — silently skip
         storage.add_recent_text(handle, text)
