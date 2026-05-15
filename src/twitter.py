@@ -127,6 +127,32 @@ def _strip_media_placeholder(text):
     return re.sub(r"\s*\b(Video|Image|GIF)\s*$", "", text, flags=re.IGNORECASE).strip()
 
 
+_PROMO_PATTERNS = (
+    r"join\s+(?:our|the|my)\s+(?:discord|telegram|server|channel|group|community|vip|premium)",
+    r"join\s+(?:us\s+)?(?:on\s+)?(?:discord|telegram)",
+    r"link\s+in\s+bio",
+    r"\bdm\s+(?:me|us|for|to)\b",
+    r"\b(?:sign\s*up|subscribe|register)\b.*\b(?:now|today|here|link|free)\b",
+    r"\b(?:giveaway|airdrop|free\s+(?:crypto|nft|tokens?|mint))\b",
+    r"\bclaim\s+your\b",
+    r"\b(?:vip|premium)\s+(?:signals?|group|access|membership)\b",
+    r"\b(?:trading|crypto)\s+signals?\b",
+    r"\buse\s+(?:promo\s+|referral\s+)?code\b",
+    r"\b(?:referral|affiliate)\s+(?:link|code)\b",
+    r"\blimited\s+(?:time|offer|spots?)\b",
+    r"\bfollow\s+(?:us|me|@)\b",
+    r"\b(?:t\.me/|discord\.gg/|discord\.com/invite)\b",
+    r"\bnot\s+financial\s+advice\b.*\b(?:join|subscribe|signals?)\b",
+    r"#ad\b|\bsponsored\b|\bpaid\s+partnership\b",
+)
+_PROMO_RE = re.compile("|".join(_PROMO_PATTERNS), re.IGNORECASE)
+
+
+def is_promotional(text):
+    """Heuristic: True for ads / 'join our discord' / airdrop / signals spam."""
+    return bool(_PROMO_RE.search(text or ""))
+
+
 _MEDIA_NS = {"media": "http://search.yahoo.com/mrss/"}
 
 
@@ -204,6 +230,8 @@ def check_account(handle):
             continue
         storage.mark_seen(handle, tweet["id"])
         text = tweet.get("text", "")
+        if is_promotional(text):
+            continue  # skip ads / "join our discord" / airdrop spam
         if storage.has_recent_text(handle, text):
             continue  # same story re-tweeted in a thread — silently skip
         storage.add_recent_text(handle, text)
