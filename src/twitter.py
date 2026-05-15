@@ -144,6 +144,15 @@ _PROMO_PATTERNS = (
     r"\b(?:t\.me/|discord\.gg/|discord\.com/invite)\b",
     r"\bnot\s+financial\s+advice\b.*\b(?:join|subscribe|signals?)\b",
     r"#ad\b|\bsponsored\b|\bpaid\s+partnership\b",
+    # YouTuber / streamer self-promo
+    r"\b(?:youtu\.be/|youtube\.com/(?:watch|live|channel|c/|@))",
+    r"\bwatch\s+(?:now|here|this|the\s+(?:full\s+)?video)\b",
+    r"\b(?:new|latest|fresh)\s+(?:video|upload|episode|stream)\b",
+    r"\b(?:check\s+out|watch)\s+my\s+(?:new\s+)?(?:video|channel|stream)\b",
+    r"\bsubscribe\s+to\s+my\b",
+    r"\b(?:live|streaming)\s+now\b|\bgoing\s+live\b",
+    r"\bfull\s+(?:video|analysis|breakdown)\s+(?:here|below|now|on\s+youtube)\b",
+    r"\blink\s+(?:below|in\s+(?:the\s+)?(?:comments|replies|thread))\b",
 )
 _PROMO_RE = re.compile("|".join(_PROMO_PATTERNS), re.IGNORECASE)
 
