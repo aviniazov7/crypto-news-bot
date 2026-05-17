@@ -123,8 +123,19 @@ def _extract_media(html_desc):
 
 
 def _strip_media_placeholder(text):
-    """Drop the trailing "Video"/"Image"/"GIF" word Nitter appends in descriptions."""
-    return re.sub(r"\s*\b(Video|Image|GIF)\s*$", "", text, flags=re.IGNORECASE).strip()
+    """Clean Nitter description noise: cut the embedded quoted/retweeted block
+    (placeholder + author handle) and drop standalone Video/Image/GIF tokens."""
+    text = text or ""
+    # Quoted-tweet block looks like "... Video <Name> (@handle) ..." — cut it.
+    text = re.split(
+        r"\b(?:Video|Image|GIF)\b\s+[^\n]{0,50}?\(@[\w]{1,30}\)",
+        text,
+        maxsplit=1,
+        flags=re.IGNORECASE,
+    )[0]
+    # Drop any remaining standalone placeholder tokens.
+    text = re.sub(r"\b(Video|Image|GIF)\b", " ", text, flags=re.IGNORECASE)
+    return re.sub(r"\s{2,}", " ", text).strip()
 
 
 _PROMO_PATTERNS = (
