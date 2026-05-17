@@ -73,6 +73,18 @@ def translate_he(text):
         return text
 
 
+_LTR_RUN_RE = re.compile(
+    r"[A-Za-z0-9$][A-Za-z0-9 $%&@#.,:/_+()'\"-]*[A-Za-z0-9%)]|[A-Za-z0-9$]"
+)
+
+
+def bidi_fix(text):
+    """Wrap Latin/number/symbol runs in LTR isolates so mixed Hebrew+English
+    keeps the right visual order in Telegram (e.g. '$BTC', '8 SLD', '82K')."""
+    LRI, PDI = "⁦", "⁩"
+    return _LTR_RUN_RE.sub(lambda m: f"{LRI}{m.group(0)}{PDI}", text or "")
+
+
 def _clean_rss_desc(desc, title, source):
     """Strip RSS quirks from a description: source prefix, title duplication,
     "The post X appeared first on Y" feed signatures, collapse whitespace."""
@@ -300,12 +312,12 @@ def build_briefing(news, prices):
         L.append("")
 
         for i, item in enumerate(news[:5], 1):
-            title_he = translate_he(item["title"])
+            title_he = bidi_fix(translate_he(item["title"]))
             L.append(f"{R}{i}. {title_he}")
 
             desc = (item.get("desc") or "").strip()
             if desc and len(desc) > 30:
-                desc_he = translate_he(desc)
+                desc_he = bidi_fix(translate_he(desc))
                 L.append(f"{R}   {desc_he}")
 
             L.append("")
@@ -365,12 +377,12 @@ def build_news_message(news):
         return "\n".join(L)
 
     for i, item in enumerate(news[:5], 1):
-        title_he = translate_he(item["title"])
+        title_he = bidi_fix(translate_he(item["title"]))
         L.append(f"{R}{i}. {title_he}")
 
         desc = (item.get("desc") or "").strip()
         if desc and len(desc) > 30:
-            desc_he = translate_he(desc)
+            desc_he = bidi_fix(translate_he(desc))
             L.append(f"{R}   {desc_he}")
 
         L.append("")

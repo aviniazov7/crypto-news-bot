@@ -9,7 +9,7 @@ import xml.etree.ElementTree as ET
 from datetime import timedelta, timezone
 from html import unescape
 
-from news import http_get, clean_html, parse_date, translate_he
+from news import http_get, clean_html, parse_date, translate_he, bidi_fix
 import storage
 
 ISRAEL_TZ = timezone(timedelta(hours=3))
@@ -297,7 +297,7 @@ def format_tweet_message(tweet):
     R = "\u200F"
     raw_text = _strip_news_prefix(tweet.get("text") or "")
     text_he = translate_he(raw_text[:500]) if raw_text else ""
-    return f"{R}{text_he or '(ללא טקסט)'}"
+    return f"{R}{bidi_fix(text_he) or '(ללא טקסט)'}"
 
 
 def init_account(handle):
