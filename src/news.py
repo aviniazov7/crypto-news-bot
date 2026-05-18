@@ -61,6 +61,29 @@ def parse_date(raw):
     return None
 
 
+_JARGON_FIXES = (
+    # Google translates trading jargon literally — fix the worst offenders.
+    ("מכנסיים הקצרים", "שורטים"),
+    ("המכנסיים הקצרים", "השורטים"),
+    ("מכנסיים קצרים", "שורטים"),
+    ("מכנסי קצר", "שורט"),
+    ("מכנס קצר", "שורט"),
+    ("לקנות את המטבל", "לקנות בירידה"),
+    ("קניית המטבל", "קניית הירידה"),
+    ("את המטבל", "את הירידה"),
+    ("המטבל", "הירידה"),
+    ("טבילה", "ירידה"),
+    ("שׁוֹרי", "שורי"),
+)
+
+
+def _fix_he_jargon(text):
+    """Replace literal mistranslations of crypto/trading slang."""
+    for bad, good in _JARGON_FIXES:
+        text = text.replace(bad, good)
+    return text
+
+
 def translate_he(text):
     try:
         encoded = urllib.parse.quote(text[:300])
@@ -68,7 +91,7 @@ def translate_he(text):
         req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
         with urllib.request.urlopen(req, timeout=10) as resp:
             data = json.loads(resp.read().decode())
-            return "".join(p[0] for p in data[0] if p[0])
+            return _fix_he_jargon("".join(p[0] for p in data[0] if p[0]))
     except Exception:
         return text
 
