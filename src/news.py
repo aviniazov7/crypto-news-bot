@@ -84,7 +84,7 @@ def _fix_he_jargon(text):
     return text
 
 
-def translate_he(text):
+def _google_translate_he(text):
     try:
         encoded = urllib.parse.quote(text[:300])
         url = f"https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=he&dt=t&q={encoded}"
@@ -94,6 +94,49 @@ def translate_he(text):
             return _fix_he_jargon("".join(p[0] for p in data[0] if p[0]))
     except Exception:
         return text
+
+
+_GEMINI_KEY = os.environ.get("GEMINI_API_KEY", "")
+_GEMINI_MODEL = "gemini-2.0-flash"
+
+
+def _gemini_translate_he(text):
+    """Translate to Hebrew via Gemini with correct crypto/trading terminology."""
+    prompt = (
+        "Translate the following crypto/finance text to natural Hebrew. "
+        "Use correct trading terminology: 'short(s)' = שורט/שורטים, "
+        "'long(s)' = לונג/לונגים, 'buy the dip' = קניית הירידה, "
+        "'pump' = פאמפ, 'dump' = מפולת, 'bullish' = שורי, "
+        "'bearish' = דובי. Keep ticker symbols ($BTC, ETH) as-is. "
+        "Return ONLY the Hebrew translation, no quotes or notes.\n\n"
+        f"{text}"
+    )
+    payload = json.dumps({
+        "contents": [{"parts": [{"text": prompt}]}],
+        "generationConfig": {"temperature": 0.2, "maxOutputTokens": 400},
+    }).encode("utf-8")
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/{_GEMINI_MODEL}:generateContent?key={_GEMINI_KEY}"
+    req = urllib.request.Request(
+        url, data=payload, headers={"Content-Type": "application/json"}, method="POST"
+    )
+    with urllib.request.urlopen(req, timeout=20) as resp:
+        data = json.loads(resp.read().decode())
+        parts = data.get("candidates", [{}])[0].get("content", {}).get("parts", [])
+        out = (parts[0].get("text", "") if parts else "").strip()
+        if not out:
+            raise ValueError("empty Gemini response")
+        return out
+
+
+def translate_he(text):
+    if not text:
+        return text
+    if _GEMINI_KEY:
+        try:
+            return _gemini_translate_he(text)
+        except Exception as e:
+            print(f"  ⚠️  Gemini translate fell back to Google: {e}")
+    return _google_translate_he(text)
 
 
 _LTR_RUN_RE = re.compile(
