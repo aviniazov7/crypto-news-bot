@@ -74,6 +74,10 @@ _JARGON_FIXES = (
     ("המטבל", "הירידה"),
     ("טבילה", "ירידה"),
     ("שׁוֹרי", "שורי"),
+    ("קרקפת ארוכה", "סקאלפ לונג"),
+    ("קרקפת קצרה", "סקאלפ שורט"),
+    ("קרקופת", "סקאלפ"),
+    ("קרקפת", "סקאלפ"),
 )
 
 
@@ -107,7 +111,8 @@ def _gemini_translate_he(text):
         "Use correct trading terminology: 'short(s)' = שורט/שורטים, "
         "'long(s)' = לונג/לונגים, 'buy the dip' = קניית הירידה, "
         "'pump' = פאמפ, 'dump' = מפולת, 'bullish' = שורי, "
-        "'bearish' = דובי. Keep ticker symbols ($BTC, ETH) as-is. "
+        "'bearish' = דובי, 'scalp'/'scalping' = סקאלפ (NEVER קרקפת), "
+        "'long scalp' = סקאלפ לונג. Keep ticker symbols ($BTC, ETH) as-is. "
         "Return ONLY the Hebrew translation, no quotes or notes.\n\n"
         f"{text}"
     )
