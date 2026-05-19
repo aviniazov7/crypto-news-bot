@@ -78,6 +78,8 @@ _JARGON_FIXES = (
     ("קרקפת קצרה", "סקאלפ שורט"),
     ("קרקופת", "סקאלפ"),
     ("קרקפת", "סקאלפ"),
+    ("הרשות הפלסטינית", "פעולת המחיר"),
+    ("רשות פלסטינית", "פעולת מחיר"),
 )
 
 
@@ -107,13 +109,18 @@ _GEMINI_MODEL = "gemini-2.0-flash"
 def _gemini_translate_he(text):
     """Translate to Hebrew via Gemini with correct crypto/trading terminology."""
     prompt = (
-        "Translate the following crypto/finance text to natural Hebrew. "
-        "Use correct trading terminology: 'short(s)' = שורט/שורטים, "
-        "'long(s)' = לונג/לונגים, 'buy the dip' = קניית הירידה, "
-        "'pump' = פאמפ, 'dump' = מפולת, 'bullish' = שורי, "
-        "'bearish' = דובי, 'scalp'/'scalping' = סקאלפ (NEVER קרקפת), "
-        "'long scalp' = סקאלפ לונג. Keep ticker symbols ($BTC, ETH) as-is. "
-        "Return ONLY the Hebrew translation, no quotes or notes.\n\n"
+        "You are a professional crypto/finance editor. Rewrite the text below "
+        "in clear, fluent, professional Hebrew as a finance desk would phrase "
+        "it — not a literal machine translation. Keep it concise and natural.\n"
+        "Rules:\n"
+        "- Trading terms: short(s)=שורט/שורטים, long(s)=לונג/לונגים, "
+        "buy the dip=קניית הירידה, pump=פאמפ, dump=מפולת, bullish=שורי, "
+        "bearish=דובי, scalp/scalping=סקאלפ (NEVER קרקפת), long scalp=סקאלפ לונג.\n"
+        "- Trading abbreviations stay as trading terms: 'PA'=פעולת מחיר "
+        "(price action, NEVER 'הרשות הפלסטינית'), 'TWAP'/'VWAP'/'OI'/'CVD' "
+        "keep as-is in English.\n"
+        "- Keep ticker symbols and prices as-is ($BTC, ETH, 76k, $76,672).\n"
+        "- Output ONLY the Hebrew text, no quotes, notes, or preamble.\n\n"
         f"{text}"
     )
     payload = json.dumps({
