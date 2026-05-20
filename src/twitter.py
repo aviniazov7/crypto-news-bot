@@ -313,7 +313,11 @@ def format_tweet_message(tweet):
     """Format a tweet for Telegram."""
     R = "\u200F"
     raw_text = _strip_news_prefix(tweet.get("text") or "")
-    text_he = translate_he(raw_text[:500]) if raw_text else ""
+    # Telegram photo caption cap is 1024; Hebrew text is ~2x as char-dense as
+    # the English source, so cap raw input around 900 and trim final output.
+    text_he = translate_he(raw_text[:900]) if raw_text else ""
+    if text_he and len(text_he) > 1000:
+        text_he = text_he[:1000].rsplit(" ", 1)[0] + "\u2026"
     return f"{R}{bidi_fix(text_he) or '(ללא טקסט)'}"
 
 

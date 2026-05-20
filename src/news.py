@@ -125,7 +125,7 @@ def _gemini_translate_he(text):
     )
     payload = json.dumps({
         "contents": [{"parts": [{"text": prompt}]}],
-        "generationConfig": {"temperature": 0.2, "maxOutputTokens": 400},
+        "generationConfig": {"temperature": 0.2, "maxOutputTokens": 1024},
     }).encode("utf-8")
     url = f"https://generativelanguage.googleapis.com/v1beta/models/{_GEMINI_MODEL}:generateContent?key={_GEMINI_KEY}"
     req = urllib.request.Request(
