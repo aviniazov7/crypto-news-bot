@@ -151,6 +151,47 @@ def translate_he(text):
     return _google_translate_he(text)
 
 
+def is_crypto_relevant_ai(text):
+    """Ask Gemini whether a tweet is crypto/finance/markets-relevant.
+    Returns True/False/None (None = AI unavailable or errored — caller decides)."""
+    text = (text or "").strip()
+    if not text or not _GEMINI_KEY:
+        return None
+    prompt = (
+        "You are a strict relevance filter for a crypto/finance news bot.\n"
+        "Answer with a single word: YES or NO.\n"
+        "YES if the post is about: cryptocurrency, blockchain, tokens, DeFi, "
+        "trading, technical analysis, financial markets, stocks, macro economics, "
+        "central banks, regulation of crypto/finance, exchanges, or related "
+        "market commentary.\n"
+        "NO if the post is about: politics, war, crime, social issues, sports, "
+        "entertainment, personal life, memes without market context, generic "
+        "tech, or anything unrelated to crypto/finance/markets.\n\n"
+        f"Post:\n{text[:800]}\n\nAnswer (YES or NO):"
+    )
+    payload = json.dumps({
+        "contents": [{"parts": [{"text": prompt}]}],
+        "generationConfig": {"temperature": 0.0, "maxOutputTokens": 4},
+    }).encode("utf-8")
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/{_GEMINI_MODEL}:generateContent?key={_GEMINI_KEY}"
+    req = urllib.request.Request(
+        url, data=payload, headers={"Content-Type": "application/json"}, method="POST"
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            data = json.loads(resp.read().decode())
+            parts = data.get("candidates", [{}])[0].get("content", {}).get("parts", [])
+            out = (parts[0].get("text", "") if parts else "").strip().upper()
+            if out.startswith("YES"):
+                return True
+            if out.startswith("NO"):
+                return False
+            return None
+    except Exception as e:
+        print(f"  ⚠️  Gemini relevance check failed: {e}")
+        return None
+
+
 _LTR_RUN_RE = re.compile(
     r"[A-Za-z0-9$][A-Za-z0-9 $%&@#.,:/_+()'\"-]*[A-Za-z0-9%)]|[A-Za-z0-9$]"
 )
