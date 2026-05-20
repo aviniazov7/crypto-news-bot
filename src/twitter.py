@@ -9,7 +9,7 @@ import xml.etree.ElementTree as ET
 from datetime import timedelta, timezone
 from html import unescape
 
-from news import http_get, clean_html, parse_date, translate_he, bidi_fix
+from news import http_get, clean_html, parse_date, translate_he, bidi_fix, is_crypto_relevant_ai
 import storage
 
 ISRAEL_TZ = timezone(timedelta(hours=3))
@@ -283,7 +283,13 @@ def check_account(handle):
         if is_promotional(text):
             continue  # skip ads / "join our discord" / airdrop spam
         if not is_crypto_relevant(text):
-            continue  # skip off-topic posts (X algorithm, Grok, generic tech)
+            continue  # fast keyword filter: skip obviously off-topic
+        # AI verifier — catches false positives that pass the keyword filter
+        # (e.g. political/news posts that happen to mention "rally", "fed", etc.).
+        # On AI error/unavailable (None) we trust the keyword filter and let through.
+        if is_crypto_relevant_ai(text) is False:
+            print(f"  🚫 AI filter dropped off-topic post from @{handle}: {text[:80]}")
+            continue
         if storage.has_recent_text(handle, text):
             continue  # same story re-tweeted in a thread — silently skip
         storage.add_recent_text(handle, text)
