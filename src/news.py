@@ -80,6 +80,8 @@ _JARGON_FIXES = (
     ("קרקפת", "סקאלפ"),
     ("הרשות הפלסטינית", "פעולת המחיר"),
     ("רשות פלסטינית", "פעולת מחיר"),
+    ("גבוה לב", "מינוף גבוה"),
+    ("מינוף לב", "מינוף"),
 )
 
 
@@ -117,8 +119,10 @@ def _gemini_translate_he(text):
         "buy the dip=קניית הירידה, pump=פאמפ, dump=מפולת, bullish=שורי, "
         "bearish=דובי, scalp/scalping=סקאלפ (NEVER קרקפת), long scalp=סקאלפ לונג.\n"
         "- Trading abbreviations stay as trading terms: 'PA'=פעולת מחיר "
-        "(price action, NEVER 'הרשות הפלסטינית'), 'TWAP'/'VWAP'/'OI'/'CVD' "
-        "keep as-is in English.\n"
+        "(price action, NEVER 'הרשות הפלסטינית'), 'lev'/'leverage'=מינוף "
+        "(NEVER 'לב'/heart), 'high lev'=מינוף גבוה, 'liq'/'liquidation'=חיסול, "
+        "'MM'/'MMs'=עושי שוק, 'OI'=פוזיציות פתוחות, "
+        "'TWAP'/'VWAP'/'CVD' keep as-is in English.\n"
         "- Keep ticker symbols and prices as-is ($BTC, ETH, 76k, $76,672).\n"
         "- Output ONLY the Hebrew text, no quotes, notes, or preamble.\n\n"
         f"{text}"
