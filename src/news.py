@@ -127,7 +127,9 @@ def _gemini_translate_he(text):
         "'high lev'=מינוף גבוה, 'liq'/'liquidation'=חיסול, "
         "'liquidation hunt(s)'=ציד חיסולים, 'MM'/'MMs'/\"MM's\"/'market maker(s)'"
         "=עושי שוק, 'OI'=פוזיציות פתוחות, 'spot'=ספוט, 'delta'=דלתא, "
-        "'peace deal'=הסכם שלום, '7D'=7 ימים, 'docket'=על הפרק.\n"
+        "'perp(s)'/'perpetual(s)'=פרפס (חוזים עתידיים), 'oil'=נפט, "
+        "'longs'=לונגים, 'shorts'=שורטים, 'peace deal'=הסכם שלום, "
+        "'7D'=7 ימים, 'docket'=על הפרק.\n"
         "- Keep in English ONLY: ticker symbols ($BTC, ETH), prices/numbers "
         "(76k, $76,672), and the acronyms 'TWAP'/'VWAP'/'CVD'.\n"
         "- Output ONLY the Hebrew text, no quotes, notes, or preamble.\n\n"
@@ -168,15 +170,17 @@ def is_crypto_relevant_ai(text):
     if not text or not _GEMINI_KEY:
         return None
     prompt = (
-        "You are a strict relevance filter for a crypto/finance news bot.\n"
-        "Answer with a single word: YES or NO.\n"
-        "YES if the post is about: cryptocurrency, blockchain, tokens, DeFi, "
-        "trading, technical analysis, financial markets, stocks, macro economics, "
-        "central banks, regulation of crypto/finance, exchanges, or related "
-        "market commentary.\n"
-        "NO if the post is about: politics, war, crime, social issues, sports, "
-        "entertainment, personal life, memes without market context, generic "
-        "tech, or anything unrelated to crypto/finance/markets.\n\n"
+        "You are a strict relevance AND quality filter for a crypto/finance "
+        "news bot. Answer with a single word: YES or NO.\n"
+        "YES if the post delivers real crypto/finance/markets substance: news, "
+        "data, price levels, technical analysis, on-chain info, macro events, "
+        "regulation, exchange/institution activity, or a concrete market "
+        "take with actual information.\n"
+        "NO if the post is: off-topic (politics, war, crime, sports, "
+        "entertainment, personal life, generic tech), OR a low-value post with "
+        "no real market info — a meme, joke, sarcastic/satirical 'playbook', "
+        "rage-bait, vague hype, a 'gm'/'wagmi' one-liner, or pure commentary "
+        "with no concrete data even if it mentions crypto.\n\n"
         f"Post:\n{text[:800]}\n\nAnswer (YES or NO):"
     )
     payload = json.dumps({
