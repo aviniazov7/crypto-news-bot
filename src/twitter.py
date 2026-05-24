@@ -9,7 +9,7 @@ import xml.etree.ElementTree as ET
 from datetime import timedelta, timezone
 from html import unescape
 
-from news import http_get, clean_html, parse_date, translate_he, bidi_fix, is_crypto_relevant_ai
+from news import http_get, clean_html, parse_date, translate_he, bidi_fix, is_crypto_relevant_ai, is_crypto_relevant
 import storage
 
 ISRAEL_TZ = timezone(timedelta(hours=3))
@@ -171,36 +171,6 @@ _PROMO_RE = re.compile("|".join(_PROMO_PATTERNS), re.IGNORECASE)
 def is_promotional(text):
     """Heuristic: True for ads / 'join our discord' / airdrop / signals spam."""
     return bool(_PROMO_RE.search(text or ""))
-
-
-_CRYPTO_TERMS = (
-    # core
-    "crypto", "bitcoin", "btc", "ethereum", "eth", "blockchain", "altcoin",
-    "stablecoin", "defi", "memecoin", "satoshi", "halving", "on-chain",
-    "onchain", "web3", "tokeniz", "wallet", "mining", "miner",
-    # major coins / tickers
-    "solana", "$sol", "xrp", "ripple", "$bnb", "binance", "cardano", "$ada",
-    "dogecoin", "$doge", "tron", "$trx", "avalanche", "$avax", "chainlink",
-    "$link", "polkadot", "polygon", "litecoin", "shiba", "pepe", "usdt",
-    "usdc", "tether", "$btc", "$eth",
-    # exchanges / institutions
-    "coinbase", "kraken", "okx", "bybit", "bitget", "microstrategy",
-    "grayscale", "blackrock", "circle",
-    # finance / macro
-    "etf", "sec ", "regulat", "federal reserve", " fed ", "interest rate",
-    "inflation", "recession", "nasdaq", "s&p", "treasury", "liquidat",
-    "leverage", "futures", "bull market", "bear market", "bullish",
-    "bearish", "market cap", "all-time high", "all time high", "rally",
-    "selloff", "sell-off", "dump", "pump", "hodl", "stock market",
-    "wall street", "gdp", "cpi", "fiat",
-)
-
-
-def is_crypto_relevant(text):
-    """True if the tweet mentions a crypto/finance term — used to drop
-    off-topic posts (X algorithm, Grok, generic tech) from tracked accounts."""
-    t = (text or "").lower()
-    return any(term in t for term in _CRYPTO_TERMS)
 
 
 _MEDIA_NS = {"media": "http://search.yahoo.com/mrss/"}
