@@ -284,6 +284,38 @@ def wrap_text(text, width=38):
         lines.append(current)
     return lines
 
+# ── Relevance filter (shared by RSS news and Twitter) ───────────────
+
+_CRYPTO_TERMS = (
+    # core
+    "crypto", "bitcoin", "btc", "ethereum", "eth", "blockchain", "altcoin",
+    "stablecoin", "defi", "memecoin", "satoshi", "halving", "on-chain",
+    "onchain", "web3", "tokeniz", "wallet", "mining", "miner",
+    # major coins / tickers
+    "solana", "$sol", "xrp", "ripple", "$bnb", "binance", "cardano", "$ada",
+    "dogecoin", "$doge", "tron", "$trx", "avalanche", "$avax", "chainlink",
+    "$link", "polkadot", "polygon", "litecoin", "shiba", "pepe", "usdt",
+    "usdc", "tether", "$btc", "$eth",
+    # exchanges / institutions
+    "coinbase", "kraken", "okx", "bybit", "bitget", "microstrategy",
+    "grayscale", "blackrock", "circle", "ftx",
+    # finance / macro
+    "etf", "sec ", "regulat", "federal reserve", " fed ", "interest rate",
+    "inflation", "recession", "nasdaq", "s&p", "treasury", "liquidat",
+    "leverage", "futures", "bull market", "bear market", "bullish",
+    "bearish", "market cap", "all-time high", "all time high", "rally",
+    "selloff", "sell-off", "dump", "pump", "hodl", "stock market",
+    "wall street", "gdp", "cpi", "fiat",
+)
+
+
+def is_crypto_relevant(text):
+    """True if the text mentions a crypto/finance term — used to drop
+    off-topic posts/news (generic AI/tech, lifestyle, politics)."""
+    t = (text or "").lower()
+    return any(term in t for term in _CRYPTO_TERMS)
+
+
 # ── RSS Scraping ────────────────────────────────────────────────────
 
 def scrape_feed(feed, cutoff):
@@ -333,9 +365,12 @@ def fetch_all_news():
     seen, unique = set(), []
     for item in all_news:
         key = item["title"].lower()[:50]
-        if key not in seen:
-            seen.add(key)
-            unique.append(item)
+        if key in seen:
+            continue
+        if not is_crypto_relevant(f"{item['title']} {item.get('desc', '')}"):
+            continue  # drop off-topic filler (generic AI/tech, lifestyle, etc.)
+        seen.add(key)
+        unique.append(item)
     return unique
 
 # ── CoinGecko Prices ───────────────────────────────────────────────
