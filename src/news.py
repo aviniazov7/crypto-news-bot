@@ -82,6 +82,10 @@ _JARGON_FIXES = (
     ("רשות פלסטינית", "פעולת מחיר"),
     ("גבוה לב", "מינוף גבוה"),
     ("מינוף לב", "מינוף"),
+    ("ריבית פתוחה", "פוזיציות פתוחות"),
+    ("אסיה נמוך", "שפל אסיה"),
+    ("נמוך אסיה", "שפל אסיה"),
+    ("אסיה גבוה", "שיא אסיה"),
 )
 
 
@@ -129,7 +133,14 @@ def _gemini_translate_he(text):
         "=עושי שוק, 'OI'=פוזיציות פתוחות, 'spot'=ספוט, 'delta'=דלתא, "
         "'perp(s)'/'perpetual(s)'=פרפס (חוזים עתידיים), 'oil'=נפט, "
         "'longs'=לונגים, 'shorts'=שורטים, 'peace deal'=הסכם שלום, "
-        "'7D'=7 ימים, 'docket'=על הפרק.\n"
+        "'7D'=7 ימים, 'docket'=על הפרק, "
+        "'open interest'=פוזיציות פתוחות (NEVER 'ריבית פתוחה'), "
+        "'Asia/London/NY low'=שפל מושב אסיה/לונדון/ניו-יורק (NEVER literal "
+        "'אסיה נמוך'), 'Asia/London/NY high'=שיא מושב אסיה/לונדון/ניו-יורק, "
+        "'LTF'=טווח זמן קצר, 'HTF'=טווח זמן ארוך, 'FVG'=פער FVG, "
+        "'overextension'=מתיחת יתר, 'pivot'=נקודת היפוך, "
+        "'True Retail Longs'/'TRL'=לונגים קמעונאיים אמיתיים, "
+        "'1R'/'2R'=יחס סיכון (1R/2R, keep number).\n"
         "- Keep in English ONLY: ticker symbols ($BTC, ETH), prices/numbers "
         "(76k, $76,672), and the acronyms 'TWAP'/'VWAP'/'CVD'.\n"
         "- Output ONLY the Hebrew text, no quotes, notes, or preamble.\n\n"
@@ -157,7 +168,7 @@ def translate_he(text):
         return text
     if _GEMINI_KEY:
         try:
-            return _gemini_translate_he(text)
+            return _fix_he_jargon(_gemini_translate_he(text))
         except Exception as e:
             print(f"  ⚠️  Gemini translate fell back to Google: {e}")
     return _google_translate_he(text)
