@@ -118,7 +118,7 @@ def _google_translate_he(text):
 
 
 _GEMINI_KEY = os.environ.get("GEMINI_API_KEY", "")
-_GEMINI_MODEL = "gemini-2.0-flash"
+_GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-2.0-flash-lite")
 
 
 def _gemini_translate_he(text):
@@ -195,7 +195,7 @@ def translate_he(text):
 
 def translation_health():
     """Probe both translation engines live. Returns a dict for /health."""
-    result = {"gemini_key_set": bool(_GEMINI_KEY)}
+    result = {"gemini_key_set": bool(_GEMINI_KEY), "model": _GEMINI_MODEL}
     # Gemini
     if _GEMINI_KEY:
         try:

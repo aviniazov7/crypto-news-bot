@@ -313,6 +313,7 @@ def process_message(msg):
         lines = [
             "🩺 בדיקת מנועי תרגום:",
             f"{icon.get(g, '❌')} Gemini: {g}",
+            f"   מודל: {h.get('model', '?')}",
             f"{icon.get(gg, '❌')} Google Translate: {gg}",
         ]
         if g != "ok" and gg != "ok":
