@@ -7,6 +7,7 @@ import json
 import os
 import urllib.request
 import urllib.parse
+import urllib.error
 import xml.etree.ElementTree as ET
 from datetime import datetime, timedelta, timezone
 from html import unescape
@@ -190,6 +191,29 @@ def translate_he(text):
     # Both engines failed — return original rather than nothing.
     print("  ⚠️  All translation engines failed; sending original text")
     return text
+
+
+def translation_health():
+    """Probe both translation engines live. Returns a dict for /health."""
+    result = {"gemini_key_set": bool(_GEMINI_KEY)}
+    # Gemini
+    if _GEMINI_KEY:
+        try:
+            out = _gemini_translate_he("Bitcoin is pumping hard today")
+            result["gemini"] = "ok" if _has_hebrew(out) else "no-hebrew"
+        except urllib.error.HTTPError as e:
+            result["gemini"] = f"HTTP {e.code}" + (" (quota)" if e.code == 429 else "")
+        except Exception as e:
+            result["gemini"] = f"error: {type(e).__name__}"
+    else:
+        result["gemini"] = "no-key"
+    # Google
+    try:
+        out = _google_translate_he("Bitcoin is pumping hard today")
+        result["google"] = "ok" if (out and _has_hebrew(out)) else "failed"
+    except Exception as e:
+        result["google"] = f"error: {type(e).__name__}"
+    return result
 
 
 def is_crypto_relevant_ai(text):
