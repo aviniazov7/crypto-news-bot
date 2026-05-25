@@ -101,19 +101,57 @@ def _has_hebrew(text):
     return any("֐" <= ch <= "׿" for ch in (text or ""))
 
 
+def _gt_endpoint_gtx(text):
+    """Primary free Google endpoint (translate.googleapis.com)."""
+    q = urllib.parse.quote(text)
+    url = f"https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=he&dt=t&q={q}"
+    req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+    with urllib.request.urlopen(req, timeout=10) as resp:
+        data = json.loads(resp.read().decode())
+        return "".join(p[0] for p in data[0] if p[0])
+
+
+def _gt_endpoint_clients5(text):
+    """Alternate free Google endpoint (clients5.google.com) — different IP pool."""
+    q = urllib.parse.quote(text)
+    url = (
+        "https://clients5.google.com/translate_a/t"
+        f"?client=dict-chrome-ex&sl=en&tl=he&q={q}"
+    )
+    req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+    with urllib.request.urlopen(req, timeout=10) as resp:
+        data = json.loads(resp.read().decode())
+        # Response is either ["text", "lang"] or [["text"], ...]
+        if isinstance(data, list) and data:
+            first = data[0]
+            if isinstance(first, str):
+                return first
+            if isinstance(first, list):
+                return "".join(seg if isinstance(seg, str) else seg[0] for seg in first)
+        return ""
+
+
+def _gt_endpoint_mymemory(text):
+    """Independent free translation API as a last resort."""
+    q = urllib.parse.quote(text[:500])  # MyMemory caps query length
+    url = f"https://api.mymemory.translated.net/get?q={q}&langpair=en|he"
+    req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+    with urllib.request.urlopen(req, timeout=10) as resp:
+        data = json.loads(resp.read().decode())
+        return (data.get("responseData") or {}).get("translatedText", "")
+
+
 def _google_translate_he(text):
-    for attempt in range(3):
+    """Free translation with multiple endpoints — datacenter IPs (e.g. Render)
+    sometimes get blocked on one Google endpoint but not another."""
+    text = text[:900]
+    for engine in (_gt_endpoint_gtx, _gt_endpoint_clients5, _gt_endpoint_mymemory):
         try:
-            encoded = urllib.parse.quote(text[:900])
-            url = f"https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=he&dt=t&q={encoded}"
-            req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
-            with urllib.request.urlopen(req, timeout=10) as resp:
-                data = json.loads(resp.read().decode())
-                out = _fix_he_jargon("".join(p[0] for p in data[0] if p[0]))
-                if _has_hebrew(out):
-                    return out
+            out = _fix_he_jargon(engine(text))
+            if _has_hebrew(out):
+                return out
         except Exception as e:
-            print(f"  ⚠️  Google translate attempt {attempt + 1} failed: {e}")
+            print(f"  ⚠️  {engine.__name__} failed: {e}")
     return None
 
 
@@ -201,6 +239,44 @@ def translate_he(text):
     # Both engines failed — return original rather than nothing.
     print("  ⚠️  All translation engines failed; sending original text")
     return text
+
+
+_BATCH_LINE_RE = re.compile(r"^\s*\[(\d+)\]\s*(.*)$")
+
+
+def translate_many(texts):
+    """Translate a list of strings in ONE Gemini call (saves quota on the
+    briefing). Falls back to translating each item via Google if Gemini is
+    unavailable or the batched output can't be parsed."""
+    texts = [t or "" for t in texts]
+    if not texts:
+        return []
+    if _GEMINI_KEY:
+        try:
+            numbered = "\n".join(f"[{i}] {t}" for i, t in enumerate(texts))
+            prompt = (
+                "Translate each numbered crypto/finance line below into clear, "
+                "fluent, professional Hebrew.\n"
+                f"{_TRANSLATE_RULES}"
+                "- Return EXACTLY one line per item, in the SAME [n] format and "
+                "order, e.g. '[0] <hebrew>'. No extra lines, notes, or preamble.\n\n"
+                f"{numbered}"
+            )
+            out = _gemini_generate(prompt, 2048)
+            parsed = {}
+            for line in out.splitlines():
+                m = _BATCH_LINE_RE.match(line)
+                if m:
+                    parsed[int(m.group(1))] = _fix_he_jargon(m.group(2).strip())
+            if len(parsed) == len(texts) and all(
+                _has_hebrew(parsed[i]) or not texts[i].strip() for i in range(len(texts))
+            ):
+                return [parsed[i] for i in range(len(texts))]
+            print("  ⚠️  Batch translate parse mismatch, falling back per-item")
+        except Exception as e:
+            print(f"  ⚠️  Batch Gemini translate failed, falling back: {e}")
+    # Fallback: per-item (Google is free, so no quota concern).
+    return [translate_he(t) for t in texts]
 
 
 def filter_and_translate_tweet(text):
@@ -539,15 +615,21 @@ def build_briefing(news, prices):
         L.append(f"{R}📰 מה חדש היום:")
         L.append("")
 
-        for i, item in enumerate(news[:5], 1):
-            title_he = bidi_fix(translate_he(item["title"]))
-            L.append(f"{R}{i}. {title_he}")
-
+        top = news[:5]
+        # Batch all titles + descriptions into a single translation call.
+        to_translate = []
+        for item in top:
+            to_translate.append(item["title"])
             desc = (item.get("desc") or "").strip()
-            if desc and len(desc) > 30:
-                desc_he = bidi_fix(translate_he(desc))
-                L.append(f"{R}   {desc_he}")
+            to_translate.append(desc if len(desc) > 30 else "")
+        translated = translate_many(to_translate)
 
+        for i, item in enumerate(top, 1):
+            title_he = bidi_fix(translated[(i - 1) * 2])
+            L.append(f"{R}{i}. {title_he}")
+            desc_he = translated[(i - 1) * 2 + 1]
+            if desc_he:
+                L.append(f"{R}   {bidi_fix(desc_he)}")
             L.append("")
 
         if GEMINI_API_KEY:
@@ -604,15 +686,19 @@ def build_news_message(news):
         L.append(f"{R}אין חדשות חדשות כרגע")
         return "\n".join(L)
 
-    for i, item in enumerate(news[:5], 1):
-        title_he = bidi_fix(translate_he(item["title"]))
-        L.append(f"{R}{i}. {title_he}")
-
+    top = news[:5]
+    to_translate = []
+    for item in top:
+        to_translate.append(item["title"])
         desc = (item.get("desc") or "").strip()
-        if desc and len(desc) > 30:
-            desc_he = bidi_fix(translate_he(desc))
-            L.append(f"{R}   {desc_he}")
+        to_translate.append(desc if len(desc) > 30 else "")
+    translated = translate_many(to_translate)
 
+    for i, item in enumerate(top, 1):
+        L.append(f"{R}{i}. {bidi_fix(translated[(i - 1) * 2])}")
+        desc_he = translated[(i - 1) * 2 + 1]
+        if desc_he:
+            L.append(f"{R}   {bidi_fix(desc_he)}")
         L.append("")
 
     return "\n".join(L)
