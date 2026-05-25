@@ -121,43 +121,40 @@ _GEMINI_KEY = os.environ.get("GEMINI_API_KEY", "")
 _GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-2.0-flash-lite")
 
 
-def _gemini_translate_he(text):
-    """Translate to Hebrew via Gemini with correct crypto/trading terminology."""
-    prompt = (
-        "You are a professional crypto/finance editor. Rewrite the text below "
-        "in clear, fluent, professional Hebrew as a finance desk would phrase "
-        "it — not a literal machine translation. Keep it concise and natural.\n"
-        "Rules:\n"
-        "- Translate EVERYTHING into Hebrew, including capitalized/Title-Case "
-        "phrases, headlines, and trading jargon. Do NOT leave English words "
-        "untranslated just because they look like a name or are capitalized. "
-        "The ONLY things that stay in English are listed below.\n"
-        "- Trading terms: short(s)=שורט/שורטים, long(s)=לונג/לונגים, "
-        "buy the dip=קניית הירידה, pump=פאמפ, dump=מפולת, bullish=שורי, "
-        "bearish=דובי, scalp/scalping=סקאלפ (NEVER קרקפת), long scalp=סקאלפ לונג.\n"
-        "- Trading abbreviations: 'PA'=פעולת מחיר (price action, NEVER "
-        "'הרשות הפלסטינית'), 'lev'/'leverage'=מינוף (NEVER 'לב'/heart), "
-        "'high lev'=מינוף גבוה, 'liq'/'liquidation'=חיסול, "
-        "'liquidation hunt(s)'=ציד חיסולים, 'MM'/'MMs'/\"MM's\"/'market maker(s)'"
-        "=עושי שוק, 'OI'=פוזיציות פתוחות, 'spot'=ספוט, 'delta'=דלתא, "
-        "'perp(s)'/'perpetual(s)'=פרפס (חוזים עתידיים), 'oil'=נפט, "
-        "'longs'=לונגים, 'shorts'=שורטים, 'peace deal'=הסכם שלום, "
-        "'7D'=7 ימים, 'docket'=על הפרק, "
-        "'open interest'=פוזיציות פתוחות (NEVER 'ריבית פתוחה'), "
-        "'Asia/London/NY low'=שפל מושב אסיה/לונדון/ניו-יורק (NEVER literal "
-        "'אסיה נמוך'), 'Asia/London/NY high'=שיא מושב אסיה/לונדון/ניו-יורק, "
-        "'LTF'=טווח זמן קצר, 'HTF'=טווח זמן ארוך, 'FVG'=פער FVG, "
-        "'overextension'=מתיחת יתר, 'pivot'=נקודת היפוך, "
-        "'True Retail Longs'/'TRL'=לונגים קמעונאיים אמיתיים, "
-        "'1R'/'2R'=יחס סיכון (1R/2R, keep number).\n"
-        "- Keep in English ONLY: ticker symbols ($BTC, ETH), prices/numbers "
-        "(76k, $76,672), and the acronyms 'TWAP'/'VWAP'/'CVD'.\n"
-        "- Output ONLY the Hebrew text, no quotes, notes, or preamble.\n\n"
-        f"{text}"
-    )
+_TRANSLATE_RULES = (
+    "Rules:\n"
+    "- Translate EVERYTHING into Hebrew, including capitalized/Title-Case "
+    "phrases, headlines, and trading jargon. Do NOT leave English words "
+    "untranslated just because they look like a name or are capitalized. "
+    "The ONLY things that stay in English are listed below.\n"
+    "- Trading terms: short(s)=שורט/שורטים, long(s)=לונג/לונגים, "
+    "buy the dip=קניית הירידה, pump=פאמפ, dump=מפולת, bullish=שורי, "
+    "bearish=דובי, scalp/scalping=סקאלפ (NEVER קרקפת), long scalp=סקאלפ לונג.\n"
+    "- Trading abbreviations: 'PA'=פעולת מחיר (price action, NEVER "
+    "'הרשות הפלסטינית'), 'lev'/'leverage'=מינוף (NEVER 'לב'/heart), "
+    "'high lev'=מינוף גבוה, 'liq'/'liquidation'=חיסול, "
+    "'liquidation hunt(s)'=ציד חיסולים, 'MM'/'MMs'/\"MM's\"/'market maker(s)'"
+    "=עושי שוק, 'OI'=פוזיציות פתוחות, 'spot'=ספוט, 'delta'=דלתא, "
+    "'perp(s)'/'perpetual(s)'=פרפס (חוזים עתידיים), 'oil'=נפט, "
+    "'longs'=לונגים, 'shorts'=שורטים, 'peace deal'=הסכם שלום, "
+    "'7D'=7 ימים, 'docket'=על הפרק, "
+    "'open interest'=פוזיציות פתוחות (NEVER 'ריבית פתוחה'), "
+    "'Asia/London/NY low'=שפל מושב אסיה/לונדון/ניו-יורק (NEVER literal "
+    "'אסיה נמוך'), 'Asia/London/NY high'=שיא מושב אסיה/לונדון/ניו-יורק, "
+    "'LTF'=טווח זמן קצר, 'HTF'=טווח זמן ארוך, 'FVG'=פער FVG, "
+    "'overextension'=מתיחת יתר, 'pivot'=נקודת היפוך, "
+    "'True Retail Longs'/'TRL'=לונגים קמעונאיים אמיתיים, "
+    "'1R'/'2R'=יחס סיכון (1R/2R, keep number).\n"
+    "- Keep in English ONLY: ticker symbols ($BTC, ETH), prices/numbers "
+    "(76k, $76,672), and the acronyms 'TWAP'/'VWAP'/'CVD'.\n"
+)
+
+
+def _gemini_generate(prompt, max_tokens, temperature=0.2):
+    """Single Gemini generateContent call. Returns the text or raises."""
     payload = json.dumps({
         "contents": [{"parts": [{"text": prompt}]}],
-        "generationConfig": {"temperature": 0.2, "maxOutputTokens": 1024},
+        "generationConfig": {"temperature": temperature, "maxOutputTokens": max_tokens},
     }).encode("utf-8")
     url = f"https://generativelanguage.googleapis.com/v1beta/models/{_GEMINI_MODEL}:generateContent?key={_GEMINI_KEY}"
     req = urllib.request.Request(
@@ -170,6 +167,19 @@ def _gemini_translate_he(text):
         if not out:
             raise ValueError("empty Gemini response")
         return out
+
+
+def _gemini_translate_he(text):
+    """Translate to Hebrew via Gemini with correct crypto/trading terminology."""
+    prompt = (
+        "You are a professional crypto/finance editor. Rewrite the text below "
+        "in clear, fluent, professional Hebrew as a finance desk would phrase "
+        "it — not a literal machine translation. Keep it concise and natural.\n"
+        f"{_TRANSLATE_RULES}"
+        "- Output ONLY the Hebrew text, no quotes, notes, or preamble.\n\n"
+        f"{text}"
+    )
+    return _gemini_generate(prompt, 1024)
 
 
 def translate_he(text):
@@ -190,6 +200,46 @@ def translate_he(text):
         return out
     # Both engines failed — return original rather than nothing.
     print("  ⚠️  All translation engines failed; sending original text")
+    return text
+
+
+def filter_and_translate_tweet(text):
+    """One Gemini call that BOTH filters and translates a tweet.
+    Returns the Hebrew translation, or None if the post should be skipped
+    (off-topic / low-value). Falls back to Google translate (keeping the
+    post) if Gemini is unavailable — the keyword filter already ran upstream."""
+    text = (text or "").strip()
+    if not text:
+        return ""
+    if _GEMINI_KEY:
+        try:
+            prompt = (
+                "You are a filter+translator for a crypto/finance news bot.\n"
+                "STEP 1 — If the post is off-topic (politics, war, crime, sports, "
+                "entertainment, generic tech, personal life) OR low-value with no "
+                "concrete market info (meme, joke, sarcastic 'playbook', vague "
+                "hype, gm/wagmi one-liner), output exactly the single word SKIP "
+                "and nothing else.\n"
+                "STEP 2 — Otherwise translate it to clear, fluent, professional "
+                "Hebrew as a finance desk would phrase it.\n"
+                f"{_TRANSLATE_RULES}"
+                "- Output ONLY the word SKIP, or ONLY the Hebrew translation. "
+                "No quotes, notes, or preamble.\n\n"
+                f"{text}"
+            )
+            out = _gemini_generate(prompt, 1024)
+            if out.strip().upper().startswith("SKIP"):
+                return None
+            out = _fix_he_jargon(out)
+            if _has_hebrew(out):
+                return out
+            print("  ⚠️  Gemini filter+translate gave non-Hebrew, trying Google")
+        except Exception as e:
+            print(f"  ⚠️  Gemini filter+translate failed, trying Google: {e}")
+    # Fallback: keyword filter already passed upstream, so keep the post.
+    out = _google_translate_he(text)
+    if out and _has_hebrew(out):
+        return out
     return text
 
 
@@ -214,49 +264,6 @@ def translation_health():
     except Exception as e:
         result["google"] = f"error: {type(e).__name__}"
     return result
-
-
-def is_crypto_relevant_ai(text):
-    """Ask Gemini whether a tweet is crypto/finance/markets-relevant.
-    Returns True/False/None (None = AI unavailable or errored — caller decides)."""
-    text = (text or "").strip()
-    if not text or not _GEMINI_KEY:
-        return None
-    prompt = (
-        "You are a strict relevance AND quality filter for a crypto/finance "
-        "news bot. Answer with a single word: YES or NO.\n"
-        "YES if the post delivers real crypto/finance/markets substance: news, "
-        "data, price levels, technical analysis, on-chain info, macro events, "
-        "regulation, exchange/institution activity, or a concrete market "
-        "take with actual information.\n"
-        "NO if the post is: off-topic (politics, war, crime, sports, "
-        "entertainment, personal life, generic tech), OR a low-value post with "
-        "no real market info — a meme, joke, sarcastic/satirical 'playbook', "
-        "rage-bait, vague hype, a 'gm'/'wagmi' one-liner, or pure commentary "
-        "with no concrete data even if it mentions crypto.\n\n"
-        f"Post:\n{text[:800]}\n\nAnswer (YES or NO):"
-    )
-    payload = json.dumps({
-        "contents": [{"parts": [{"text": prompt}]}],
-        "generationConfig": {"temperature": 0.0, "maxOutputTokens": 4},
-    }).encode("utf-8")
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/{_GEMINI_MODEL}:generateContent?key={_GEMINI_KEY}"
-    req = urllib.request.Request(
-        url, data=payload, headers={"Content-Type": "application/json"}, method="POST"
-    )
-    try:
-        with urllib.request.urlopen(req, timeout=10) as resp:
-            data = json.loads(resp.read().decode())
-            parts = data.get("candidates", [{}])[0].get("content", {}).get("parts", [])
-            out = (parts[0].get("text", "") if parts else "").strip().upper()
-            if out.startswith("YES"):
-                return True
-            if out.startswith("NO"):
-                return False
-            return None
-    except Exception as e:
-        print(f"  ⚠️  Gemini relevance check failed: {e}")
-        return None
 
 
 _LTR_RUN_RE = re.compile(
