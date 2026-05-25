@@ -102,6 +102,7 @@ def set_bot_commands():
         {"command": "add", "description": "Track a Twitter account"},
         {"command": "remove", "description": "Untrack a Twitter account"},
         {"command": "groups", "description": "Manage groups"},
+        {"command": "health", "description": "Check translation engines"},
     ]
     # Remove commands for all users (default scope)
     tg_request("deleteMyCommands", {})
@@ -304,6 +305,23 @@ def process_message(msg):
         msg_id = status.get("result", {}).get("message_id")
         if msg_id:
             tg_request("deleteMessage", {"chat_id": chat_id, "message_id": msg_id})
+    elif cmd == "/health":
+        h = news.translation_health()
+        icon = {"ok": "✅"}
+        g = h.get("gemini", "?")
+        gg = h.get("google", "?")
+        lines = [
+            "🩺 בדיקת מנועי תרגום:",
+            f"{icon.get(g, '❌')} Gemini: {g}",
+            f"{icon.get(gg, '❌')} Google Translate: {gg}",
+        ]
+        if g != "ok" and gg != "ok":
+            lines.append("\n⚠️ שני המנועים נכשלו — ההודעות יישלחו באנגלית.")
+        elif g != "ok":
+            lines.append("\nℹ️ Gemini למטה — תרגום ב-Google (איכות נמוכה יותר).")
+        if "429" in str(g) or "quota" in str(g):
+            lines.append("מכסת Gemini כנראה נגמרה — בדוק ב-aistudio.google.com")
+        send_message(chat_id, "\n".join(lines), topic_id)
     elif cmd == "/groups":
         handle_groups(chat_id, topic_id)
     elif cmd == "/enable":
