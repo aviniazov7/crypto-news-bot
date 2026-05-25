@@ -92,21 +92,25 @@ def send_tweet(chat_id, tweet, caption, topic_id=None):
 def broadcast_tweet(tweet, skip_filter=False):
     """Translate a tweet ONCE, then send it to every enabled group.
 
-    The single Gemini call (filter_and_translate_tweet) both decides relevance
-    and translates. skip_filter=True (manual sends) always translates and sends.
+    Hebrew-only policy: if no Hebrew translation is available (quota spent /
+    engines down) the post is NOT sent — we never broadcast untranslated
+    English. Returns True if sent, False if skipped.
     """
     raw = twitter.tweet_raw_text(tweet)
+    if not raw:
+        return False
     if skip_filter:
-        text_he = news.translate_he(raw) if raw else ""
+        text_he = news.translate_he_or_none(raw)
     else:
-        text_he = news.filter_and_translate_tweet(raw) if raw else ""
-        if text_he is None:
-            print(f"  🚫 AI filter dropped off-topic/low-value post: {raw[:80]}")
-            return
+        text_he = news.filter_and_translate_tweet(raw)
+    if not text_he:
+        print(f"  🚫 Not sent (off-topic or no Hebrew translation): {raw[:80]}")
+        return False
     caption = twitter.format_caption(text_he)
     for chat_id, topic_id in storage.get_enabled_groups():
         send_tweet(chat_id, tweet, caption, topic_id or None)
         time.sleep(0.3)
+    return True
 
 def set_bot_commands():
     commands = [
@@ -187,8 +191,15 @@ def handle_send_tweet_from_url(chat_id, url, topic_id=None):
         )
         return True
     storage.mark_seen(handle, tweet["id"])  # don't re-send if account is tracked
-    broadcast_tweet(tweet, skip_filter=True)  # manual send — always deliver
-    send_message(chat_id, "✅ נשלח לכל הקבוצות", topic_id)
+    if broadcast_tweet(tweet, skip_filter=True):
+        send_message(chat_id, "✅ נשלח לכל הקבוצות", topic_id)
+    else:
+        send_message(
+            chat_id,
+            "⚠️ לא נשלח — אין כרגע תרגום לעברית (מכסת Gemini נגמרה והתרגום החינמי חסום). "
+            "שלח /health לבדיקה.",
+            topic_id,
+        )
     return True
 
 
