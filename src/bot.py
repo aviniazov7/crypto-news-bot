@@ -69,9 +69,8 @@ def send_video(chat_id, video_url, caption=None, topic_id=None):
     return tg_request("sendVideo", payload)
 
 
-def send_tweet(chat_id, tweet, topic_id=None):
+def send_tweet(chat_id, tweet, caption, topic_id=None):
     """Send a tweet with attached media if present; fall back to text on failure."""
-    caption = twitter.format_tweet_message(tweet)
     media = tweet.get("media") or []
     tid = topic_id or None
 
@@ -88,10 +87,23 @@ def send_tweet(chat_id, tweet, topic_id=None):
     return send_message(chat_id, caption, tid)
 
 
-def broadcast_tweet(tweet):
-    """Send a tweet to every enabled group."""
+def broadcast_tweet(tweet, skip_filter=False):
+    """Translate a tweet ONCE, then send it to every enabled group.
+
+    The single Gemini call (filter_and_translate_tweet) both decides relevance
+    and translates. skip_filter=True (manual sends) always translates and sends.
+    """
+    raw = twitter.tweet_raw_text(tweet)
+    if skip_filter:
+        text_he = news.translate_he(raw) if raw else ""
+    else:
+        text_he = news.filter_and_translate_tweet(raw) if raw else ""
+        if text_he is None:
+            print(f"  🚫 AI filter dropped off-topic/low-value post: {raw[:80]}")
+            return
+    caption = twitter.format_caption(text_he)
     for chat_id, topic_id in storage.get_enabled_groups():
-        send_tweet(chat_id, tweet, topic_id or None)
+        send_tweet(chat_id, tweet, caption, topic_id or None)
         time.sleep(0.3)
 
 def set_bot_commands():
@@ -173,7 +185,7 @@ def handle_send_tweet_from_url(chat_id, url, topic_id=None):
         )
         return True
     storage.mark_seen(handle, tweet["id"])  # don't re-send if account is tracked
-    broadcast_tweet(tweet)
+    broadcast_tweet(tweet, skip_filter=True)  # manual send — always deliver
     send_message(chat_id, "✅ נשלח לכל הקבוצות", topic_id)
     return True
 

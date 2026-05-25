@@ -9,7 +9,7 @@ import xml.etree.ElementTree as ET
 from datetime import timedelta, timezone
 from html import unescape
 
-from news import http_get, clean_html, parse_date, translate_he, bidi_fix, is_crypto_relevant_ai, is_crypto_relevant
+from news import http_get, clean_html, parse_date, translate_he, bidi_fix, is_crypto_relevant, filter_and_translate_tweet
 import storage
 
 ISRAEL_TZ = timezone(timedelta(hours=3))
@@ -254,12 +254,8 @@ def check_account(handle):
             continue  # skip ads / "join our discord" / airdrop spam
         if not is_crypto_relevant(text):
             continue  # fast keyword filter: skip obviously off-topic
-        # AI verifier — catches false positives that pass the keyword filter
-        # (e.g. political/news posts that happen to mention "rally", "fed", etc.).
-        # On AI error/unavailable (None) we trust the keyword filter and let through.
-        if is_crypto_relevant_ai(text) is False:
-            print(f"  🚫 AI filter dropped off-topic post from @{handle}: {text[:80]}")
-            continue
+        # AI relevance/quality check is merged into the translation call at
+        # broadcast time (news.filter_and_translate_tweet) to save a request.
         if storage.has_recent_text(handle, text):
             continue  # same story re-tweeted in a thread — silently skip
         storage.add_recent_text(handle, text)
@@ -288,6 +284,21 @@ def format_tweet_message(tweet):
     text_he = translate_he(raw_text[:900]) if raw_text else ""
     if text_he and len(text_he) > 1000:
         text_he = text_he[:1000].rsplit(" ", 1)[0] + "\u2026"
+    return f"{R}{bidi_fix(text_he) or '(ללא טקסט)'}"
+
+
+def tweet_raw_text(tweet):
+    """Stripped, length-capped source text for translation.
+    Telegram photo caption cap is 1024; Hebrew is ~2x as char-dense as the
+    English source, so cap raw input around 900 chars."""
+    return _strip_news_prefix(tweet.get("text") or "")[:900]
+
+
+def format_caption(text_he):
+    """Wrap an already-translated Hebrew string as an RTL Telegram caption."""
+    R = "‏"
+    if text_he and len(text_he) > 1000:
+        text_he = text_he[:1000].rsplit(" ", 1)[0] + "…"
     return f"{R}{bidi_fix(text_he) or '(ללא טקסט)'}"
 
 
