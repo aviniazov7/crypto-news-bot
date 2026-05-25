@@ -341,12 +341,26 @@ def translation_health():
             result["gemini"] = f"error: {type(e).__name__}"
     else:
         result["gemini"] = "no-key"
-    # Google
-    try:
-        out = _google_translate_he("Bitcoin is pumping hard today")
-        result["google"] = "ok" if (out and _has_hebrew(out)) else "failed"
-    except Exception as e:
-        result["google"] = f"error: {type(e).__name__}"
+    # Free engines — probe each separately so we know exactly what's blocked.
+    engines = {
+        "mymemory": _gt_endpoint_mymemory,
+        "google_gtx": _gt_endpoint_gtx,
+        "google_c5": _gt_endpoint_clients5,
+    }
+    any_ok = False
+    for name, fn in engines.items():
+        try:
+            out = fn("Bitcoin is pumping hard today")
+            if _has_hebrew(out or ""):
+                result[name] = "ok"
+                any_ok = True
+            else:
+                result[name] = "no-hebrew"
+        except urllib.error.HTTPError as e:
+            result[name] = f"HTTP {e.code}"
+        except Exception as e:
+            result[name] = f"err: {type(e).__name__}"
+    result["free_ok"] = any_ok
     return result
 
 
