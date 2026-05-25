@@ -18,7 +18,9 @@ import storage
 TELEGRAM_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "")
 ADMIN_ID = os.environ.get("ADMIN_ID", "")
 TWITTER_CHECK_INTERVAL = 300   # 5 minutes
-BRIEFING_INTERVAL = 14400      # 4 hours
+# Briefing cadence in hours (env-configurable). Fewer briefings = less daily
+# Gemini quota spent. Default 4h (6/day); raise to 6 or 8 to save budget.
+BRIEFING_INTERVAL = int(os.environ.get("BRIEFING_INTERVAL_HOURS", "4")) * 3600
 ISRAEL_TZ = timezone(timedelta(hours=3))
 
 API_BASE = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}"
@@ -139,7 +141,7 @@ def handle_start(chat_id, topic_id=None, chat_name=""):
     acc_text = ", ".join(f"@{a}" for a in accounts) if accounts else "None"
     text = (
         "🤖 Crypto News Bot — Ready!\n\n"
-        f"📡 Auto-briefing every 4h to this chat\n"
+        f"📡 Auto-briefing every {BRIEFING_INTERVAL // 3600}h to this chat\n"
         f"🐦 Tracking: {acc_text}\n\n"
         "━━━━━━━━━━━━━━━━━━━\n"
         "📋 Admin Commands:\n"
@@ -382,7 +384,7 @@ def process_my_chat_member(event):
                 send_message(
                     ADMIN_ID,
                     f"✅ Added to group: {chat_name}\nID: {chat_id}\n\n"
-                    "Briefings will arrive every 4h.\n"
+                    f"Briefings will arrive every {BRIEFING_INTERVAL // 3600}h.\n"
                     "To pin them to a specific topic in a forum, send "
                     "/setup@<this_bot> inside that topic.",
                 )
