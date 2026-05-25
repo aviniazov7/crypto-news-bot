@@ -325,6 +325,7 @@ def process_message(msg):
         lines = [
             "🩺 בדיקת מנועי תרגום:",
             f"{ic(g)} Gemini ({h.get('model', '?')}): {g}",
+            f"   מכסה יומית: {h.get('budget', '?')}",
             f"{ic(h.get('mymemory'))} MyMemory: {h.get('mymemory', '?')}",
             f"{ic(h.get('google_gtx'))} Google gtx: {h.get('google_gtx', '?')}",
             f"{ic(h.get('google_c5'))} Google c5: {h.get('google_c5', '?')}",
