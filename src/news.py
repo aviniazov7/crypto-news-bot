@@ -131,10 +131,17 @@ def _gt_endpoint_clients5(text):
         return ""
 
 
+_MYMEMORY_EMAIL = os.environ.get("MYMEMORY_EMAIL", "")
+
+
 def _gt_endpoint_mymemory(text):
-    """Independent free translation API as a last resort."""
+    """Independent free translation API (real REST API — works from datacenter
+    IPs where Google's scraping endpoints are blocked). With MYMEMORY_EMAIL set,
+    the free daily limit rises from ~5k to ~50k words."""
     q = urllib.parse.quote(text[:500])  # MyMemory caps query length
     url = f"https://api.mymemory.translated.net/get?q={q}&langpair=en|he"
+    if _MYMEMORY_EMAIL:
+        url += f"&de={urllib.parse.quote(_MYMEMORY_EMAIL)}"
     req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
     with urllib.request.urlopen(req, timeout=10) as resp:
         data = json.loads(resp.read().decode())
@@ -142,10 +149,11 @@ def _gt_endpoint_mymemory(text):
 
 
 def _google_translate_he(text):
-    """Free translation with multiple endpoints — datacenter IPs (e.g. Render)
-    sometimes get blocked on one Google endpoint but not another."""
+    """Free translation with multiple engines. MyMemory (a real REST API) goes
+    first because Google's free scraping endpoints are often blocked on
+    datacenter IPs like Render's."""
     text = text[:900]
-    for engine in (_gt_endpoint_gtx, _gt_endpoint_clients5, _gt_endpoint_mymemory):
+    for engine in (_gt_endpoint_mymemory, _gt_endpoint_gtx, _gt_endpoint_clients5):
         try:
             out = _fix_he_jargon(engine(text))
             if _has_hebrew(out):
