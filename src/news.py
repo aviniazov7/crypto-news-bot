@@ -351,11 +351,22 @@ def filter_and_translate_tweet(text):
             print("  ⚠️  Gemini filter+translate gave non-Hebrew, trying Google")
         except Exception as e:
             print(f"  ⚠️  Gemini filter+translate failed, trying Google: {e}")
-    # Fallback: keyword filter already passed upstream, so keep the post.
+    # Fallback to Google. If nothing produces Hebrew, return None so the
+    # caller skips the post entirely (never send untranslated English).
     out = _google_translate_he(text)
     if out and _has_hebrew(out):
         return out
-    return text
+    print("  🚫 No Hebrew translation available — skipping post (not sending English)")
+    return None
+
+
+def translate_he_or_none(text):
+    """Like translate_he but returns None if no Hebrew could be produced,
+    so callers can choose to skip rather than send English."""
+    if not text:
+        return None
+    out = translate_he(text)
+    return out if _has_hebrew(out) else None
 
 
 def translation_health():
@@ -669,9 +680,6 @@ def build_briefing(news, prices):
         L.append("")
 
     if news:
-        L.append(f"{R}📰 מה חדש היום:")
-        L.append("")
-
         top = news[:5]
         # Batch all titles + descriptions into a single translation call.
         to_translate = []
@@ -681,17 +689,28 @@ def build_briefing(news, prices):
             to_translate.append(desc if len(desc) > 30 else "")
         translated = translate_many(to_translate)
 
-        for i, item in enumerate(top, 1):
-            title_he = bidi_fix(translated[(i - 1) * 2])
-            L.append(f"{R}{i}. {title_he}")
-            desc_he = translated[(i - 1) * 2 + 1]
-            if desc_he:
-                L.append(f"{R}   {bidi_fix(desc_he)}")
+        # Hebrew-only: keep an item only if its title actually translated.
+        news_lines = []
+        n = 0
+        for i in range(len(top)):
+            title_he = translated[i * 2]
+            if not _has_hebrew(title_he):
+                continue  # skip untranslated item (never show English)
+            n += 1
+            news_lines.append(f"{R}{n}. {bidi_fix(title_he)}")
+            desc_he = translated[i * 2 + 1]
+            if desc_he and _has_hebrew(desc_he):
+                news_lines.append(f"{R}   {bidi_fix(desc_he)}")
+            news_lines.append("")
+
+        if news_lines:
+            L.append(f"{R}📰 מה חדש היום:")
             L.append("")
+            L.extend(news_lines)
 
         # AI summary is off by default to conserve the daily Gemini budget
         # (the items above are already translated). Enable with BRIEFING_AI_SUMMARY=1.
-        if GEMINI_API_KEY and os.environ.get("BRIEFING_AI_SUMMARY", "0") == "1":
+        if news_lines and GEMINI_API_KEY and os.environ.get("BRIEFING_AI_SUMMARY", "0") == "1":
             summary = summarize_news(news[:5])
             if summary and not summary.startswith("⚠️"):
                 L.append("")
@@ -753,11 +772,19 @@ def build_news_message(news):
         to_translate.append(desc if len(desc) > 30 else "")
     translated = translate_many(to_translate)
 
-    for i, item in enumerate(top, 1):
-        L.append(f"{R}{i}. {bidi_fix(translated[(i - 1) * 2])}")
-        desc_he = translated[(i - 1) * 2 + 1]
-        if desc_he:
+    n = 0
+    for i in range(len(top)):
+        title_he = translated[i * 2]
+        if not _has_hebrew(title_he):
+            continue  # Hebrew-only: skip untranslated items
+        n += 1
+        L.append(f"{R}{n}. {bidi_fix(title_he)}")
+        desc_he = translated[i * 2 + 1]
+        if desc_he and _has_hebrew(desc_he):
             L.append(f"{R}   {bidi_fix(desc_he)}")
         L.append("")
+
+    if n == 0:
+        L.append(f"{R}⚠️ אין תרגום זמין כרגע — נסה שוב מאוחר יותר")
 
     return "\n".join(L)
