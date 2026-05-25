@@ -96,16 +96,24 @@ def _fix_he_jargon(text):
     return text
 
 
+def _has_hebrew(text):
+    return any("֐" <= ch <= "׿" for ch in (text or ""))
+
+
 def _google_translate_he(text):
-    try:
-        encoded = urllib.parse.quote(text[:300])
-        url = f"https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=he&dt=t&q={encoded}"
-        req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
-        with urllib.request.urlopen(req, timeout=10) as resp:
-            data = json.loads(resp.read().decode())
-            return _fix_he_jargon("".join(p[0] for p in data[0] if p[0]))
-    except Exception:
-        return text
+    for attempt in range(3):
+        try:
+            encoded = urllib.parse.quote(text[:900])
+            url = f"https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=he&dt=t&q={encoded}"
+            req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+            with urllib.request.urlopen(req, timeout=10) as resp:
+                data = json.loads(resp.read().decode())
+                out = _fix_he_jargon("".join(p[0] for p in data[0] if p[0]))
+                if _has_hebrew(out):
+                    return out
+        except Exception as e:
+            print(f"  ⚠️  Google translate attempt {attempt + 1} failed: {e}")
+    return None
 
 
 _GEMINI_KEY = os.environ.get("GEMINI_API_KEY", "")
@@ -166,12 +174,22 @@ def _gemini_translate_he(text):
 def translate_he(text):
     if not text:
         return text
+    # Primary: Gemini. Accept only if it actually produced Hebrew.
     if _GEMINI_KEY:
         try:
-            return _fix_he_jargon(_gemini_translate_he(text))
+            out = _fix_he_jargon(_gemini_translate_he(text))
+            if _has_hebrew(out):
+                return out
+            print("  ⚠️  Gemini returned non-Hebrew output, trying Google")
         except Exception as e:
-            print(f"  ⚠️  Gemini translate fell back to Google: {e}")
-    return _google_translate_he(text)
+            print(f"  ⚠️  Gemini translate failed, trying Google: {e}")
+    # Fallback: Google Translate (with retries).
+    out = _google_translate_he(text)
+    if out and _has_hebrew(out):
+        return out
+    # Both engines failed — return original rather than nothing.
+    print("  ⚠️  All translation engines failed; sending original text")
+    return text
 
 
 def is_crypto_relevant_ai(text):
