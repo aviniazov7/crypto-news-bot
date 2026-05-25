@@ -319,21 +319,21 @@ def process_message(msg):
             tg_request("deleteMessage", {"chat_id": chat_id, "message_id": msg_id})
     elif cmd == "/health":
         h = news.translation_health()
-        icon = {"ok": "✅"}
+        def ic(v):
+            return "✅" if v == "ok" else "❌"
         g = h.get("gemini", "?")
-        gg = h.get("google", "?")
         lines = [
             "🩺 בדיקת מנועי תרגום:",
-            f"{icon.get(g, '❌')} Gemini: {g}",
-            f"   מודל: {h.get('model', '?')}",
-            f"{icon.get(gg, '❌')} Google Translate: {gg}",
+            f"{ic(g)} Gemini ({h.get('model', '?')}): {g}",
+            f"{ic(h.get('mymemory'))} MyMemory: {h.get('mymemory', '?')}",
+            f"{ic(h.get('google_gtx'))} Google gtx: {h.get('google_gtx', '?')}",
+            f"{ic(h.get('google_c5'))} Google c5: {h.get('google_c5', '?')}",
         ]
-        if g != "ok" and gg != "ok":
-            lines.append("\n⚠️ שני המנועים נכשלו — ההודעות יישלחו באנגלית.")
-        elif g != "ok":
-            lines.append("\nℹ️ Gemini למטה — תרגום ב-Google (איכות נמוכה יותר).")
-        if "429" in str(g) or "quota" in str(g):
-            lines.append("מכסת Gemini כנראה נגמרה — בדוק ב-aistudio.google.com")
+        if g == "ok" or h.get("free_ok"):
+            lines.append("\n✅ יש מנוע תרגום עובד — ההודעות יתורגמו.")
+        else:
+            lines.append("\n⚠️ אין אף מנוע תרגום — ההודעות יישלחו באנגלית.")
+            lines.append("ה-IP של Render חסום על התרגום החינמי. הפתרון: billing ל-Gemini.")
         send_message(chat_id, "\n".join(lines), topic_id)
     elif cmd == "/groups":
         handle_groups(chat_id, topic_id)
