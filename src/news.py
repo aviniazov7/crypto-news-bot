@@ -165,6 +165,31 @@ def _google_translate_he(text):
 
 _GEMINI_KEY = os.environ.get("GEMINI_API_KEY", "")
 _GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-2.0-flash-lite")
+# Free tier is ~20 requests/day. Cap our own usage a bit under that so we
+# never hit 429 — within budget every translation is high-quality Gemini.
+_GEMINI_DAILY_BUDGET = int(os.environ.get("GEMINI_DAILY_BUDGET", "18"))
+_gemini_day = None
+_gemini_count = 0
+
+
+def _gemini_budget_left():
+    """Remaining Gemini calls allowed today (resets at local midnight)."""
+    global _gemini_day, _gemini_count
+    import datetime
+    today = datetime.date.today().isoformat()
+    if today != _gemini_day:
+        _gemini_day, _gemini_count = today, 0
+    return _GEMINI_DAILY_BUDGET - _gemini_count
+
+
+def _gemini_enabled():
+    return bool(_GEMINI_KEY) and _gemini_budget_left() > 0
+
+
+def gemini_budget_status():
+    """(used, budget) for /health."""
+    _gemini_budget_left()  # refresh day rollover
+    return _gemini_count, _GEMINI_DAILY_BUDGET
 
 
 _TRANSLATE_RULES = (
@@ -197,7 +222,13 @@ _TRANSLATE_RULES = (
 
 
 def _gemini_generate(prompt, max_tokens, temperature=0.2):
-    """Single Gemini generateContent call. Returns the text or raises."""
+    """Single Gemini generateContent call. Returns the text or raises.
+    Counts against the daily budget; raises if the budget is exhausted so
+    callers fall back to Google instead of burning into a 429."""
+    global _gemini_count
+    if _gemini_budget_left() <= 0:
+        raise RuntimeError("daily Gemini budget exhausted")
+    _gemini_count += 1
     payload = json.dumps({
         "contents": [{"parts": [{"text": prompt}]}],
         "generationConfig": {"temperature": temperature, "maxOutputTokens": max_tokens},
@@ -232,7 +263,7 @@ def translate_he(text):
     if not text:
         return text
     # Primary: Gemini. Accept only if it actually produced Hebrew.
-    if _GEMINI_KEY:
+    if _gemini_enabled():
         try:
             out = _fix_he_jargon(_gemini_translate_he(text))
             if _has_hebrew(out):
@@ -259,7 +290,7 @@ def translate_many(texts):
     texts = [t or "" for t in texts]
     if not texts:
         return []
-    if _GEMINI_KEY:
+    if _gemini_enabled():
         try:
             numbered = "\n".join(f"[{i}] {t}" for i, t in enumerate(texts))
             prompt = (
@@ -295,7 +326,7 @@ def filter_and_translate_tweet(text):
     text = (text or "").strip()
     if not text:
         return ""
-    if _GEMINI_KEY:
+    if _gemini_enabled():
         try:
             prompt = (
                 "You are a filter+translator for a crypto/finance news bot.\n"
@@ -329,9 +360,15 @@ def filter_and_translate_tweet(text):
 
 def translation_health():
     """Probe both translation engines live. Returns a dict for /health."""
-    result = {"gemini_key_set": bool(_GEMINI_KEY), "model": _GEMINI_MODEL}
+    used, budget = gemini_budget_status()
+    result = {"gemini_key_set": bool(_GEMINI_KEY), "model": _GEMINI_MODEL,
+              "budget": f"{used}/{budget}"}
     # Gemini
-    if _GEMINI_KEY:
+    if not _GEMINI_KEY:
+        result["gemini"] = "no-key"
+    elif _gemini_budget_left() <= 0:
+        result["gemini"] = "budget-spent"
+    else:
         try:
             out = _gemini_translate_he("Bitcoin is pumping hard today")
             result["gemini"] = "ok" if _has_hebrew(out) else "no-hebrew"
@@ -339,8 +376,6 @@ def translation_health():
             result["gemini"] = f"HTTP {e.code}" + (" (quota)" if e.code == 429 else "")
         except Exception as e:
             result["gemini"] = f"error: {type(e).__name__}"
-    else:
-        result["gemini"] = "no-key"
     # Free engines — probe each separately so we know exactly what's blocked.
     engines = {
         "mymemory": _gt_endpoint_mymemory,
@@ -654,7 +689,9 @@ def build_briefing(news, prices):
                 L.append(f"{R}   {bidi_fix(desc_he)}")
             L.append("")
 
-        if GEMINI_API_KEY:
+        # AI summary is off by default to conserve the daily Gemini budget
+        # (the items above are already translated). Enable with BRIEFING_AI_SUMMARY=1.
+        if GEMINI_API_KEY and os.environ.get("BRIEFING_AI_SUMMARY", "0") == "1":
             summary = summarize_news(news[:5])
             if summary and not summary.startswith("⚠️"):
                 L.append("")
