@@ -19,8 +19,8 @@ TELEGRAM_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "")
 ADMIN_ID = os.environ.get("ADMIN_ID", "")
 TWITTER_CHECK_INTERVAL = 300   # 5 minutes
 # Briefing cadence in hours (env-configurable). Fewer briefings = less daily
-# Gemini quota spent. Default 4h (6/day); raise to 6 or 8 to save budget.
-BRIEFING_INTERVAL = int(os.environ.get("BRIEFING_INTERVAL_HOURS", "4")) * 3600
+# Gemini quota spent. Default 12h (2/day) to fit the free Gemini tier.
+BRIEFING_INTERVAL = int(os.environ.get("BRIEFING_INTERVAL_HOURS", "12")) * 3600
 ISRAEL_TZ = timezone(timedelta(hours=3))
 
 API_BASE = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}"
