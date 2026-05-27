@@ -164,7 +164,8 @@ def _google_translate_he(text):
 
 
 _GEMINI_KEY = os.environ.get("GEMINI_API_KEY", "")
-_GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-2.0-flash-lite")
+# gemini-2.5-flash has a 20 req/day free tier; gemini-2.0-flash-lite has none.
+_GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash")
 # Free tier is ~20 requests/day. Cap our own usage a bit under that so we
 # never hit 429 — within budget every translation is high-quality Gemini.
 _GEMINI_DAILY_BUDGET = int(os.environ.get("GEMINI_DAILY_BUDGET", "18"))
