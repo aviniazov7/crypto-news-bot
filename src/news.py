@@ -337,10 +337,14 @@ def translate_many(texts):
                 _has_hebrew(parsed[i]) or not texts[i].strip() for i in range(len(texts))
             ):
                 return [parsed[i] for i in range(len(texts))]
-            print("  ⚠️  Batch translate parse mismatch, falling back per-item")
+            print("  ⚠️  Batch translate parse mismatch")
         except Exception as e:
-            print(f"  ⚠️  Batch Gemini translate failed, falling back: {e}")
-    # Fallback: per-item (Google is free, so no quota concern).
+            print(f"  ⚠️  Batch Gemini translate failed: {e}")
+    # Gemini-only mode (default): return empties so callers skip the items
+    # rather than degrading to Google quality. Set GEMINI_ONLY=0 to allow
+    # Google fallback (lower quality but more coverage).
+    if os.environ.get("GEMINI_ONLY", "1") == "1":
+        return ["" for _ in texts]
     return [translate_he(t) for t in texts]
 
 
@@ -374,22 +378,36 @@ def filter_and_translate_tweet(text):
             out = _fix_he_jargon(out)
             if _has_hebrew(out):
                 return out
-            print("  ⚠️  Gemini filter+translate gave non-Hebrew, trying Google")
+            print("  ⚠️  Gemini filter+translate gave non-Hebrew")
         except Exception as e:
-            print(f"  ⚠️  Gemini filter+translate failed, trying Google: {e}")
-    # Fallback to Google. If nothing produces Hebrew, return None so the
-    # caller skips the post entirely (never send untranslated English).
+            print(f"  ⚠️  Gemini filter+translate failed: {e}")
+    # Quality-first (Gemini-only) mode is the default: skip the post if we
+    # can't get a high-quality Gemini translation. Set GEMINI_ONLY=0 to
+    # accept Google fallback quality instead.
+    if os.environ.get("GEMINI_ONLY", "1") == "1":
+        print("  🚫 Skipped — Gemini unavailable and GEMINI_ONLY is on")
+        return None
     out = _google_translate_he(text)
     if out and _has_hebrew(out):
         return out
-    print("  🚫 No Hebrew translation available — skipping post (not sending English)")
+    print("  🚫 No Hebrew translation available — skipping post")
     return None
 
 
 def translate_he_or_none(text):
-    """Like translate_he but returns None if no Hebrew could be produced,
-    so callers can choose to skip rather than send English."""
+    """Quality-first translation: returns the Hebrew if Gemini can produce it,
+    or None to let the caller skip. By default (GEMINI_ONLY=1) does NOT fall
+    back to Google, so manual sends only deliver Gemini-quality output."""
     if not text:
+        return None
+    if os.environ.get("GEMINI_ONLY", "1") == "1":
+        if _gemini_enabled():
+            try:
+                out = _fix_he_jargon(_gemini_translate_he(text))
+                if _has_hebrew(out):
+                    return out
+            except Exception as e:
+                print(f"  ⚠️  Gemini translate failed (GEMINI_ONLY): {e}")
         return None
     out = translate_he(text)
     return out if _has_hebrew(out) else None
@@ -399,7 +417,8 @@ def translation_health():
     """Probe both translation engines live. Returns a dict for /health."""
     used, budget = gemini_budget_status()
     result = {"gemini_key_set": bool(_GEMINI_KEY), "model": _GEMINI_MODEL,
-              "budget": f"{used}/{budget}"}
+              "budget": f"{used}/{budget}",
+              "gemini_only": os.environ.get("GEMINI_ONLY", "1") == "1"}
     # Gemini
     if not _GEMINI_KEY:
         result["gemini"] = "no-key"

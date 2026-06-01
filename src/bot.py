@@ -335,19 +335,25 @@ def process_message(msg):
         def ic(v):
             return "✅" if v == "ok" else "❌"
         g = h.get("gemini", "?")
+        mode = "Gemini-only (איכות גבוהה)" if h.get("gemini_only") else "Gemini + Google fallback"
         lines = [
             "🩺 בדיקת מנועי תרגום:",
+            f"מצב: {mode}",
             f"{ic(g)} Gemini ({h.get('model', '?')}): {g}",
             f"   מכסה יומית: {h.get('budget', '?')}",
             f"{ic(h.get('mymemory'))} MyMemory: {h.get('mymemory', '?')}",
             f"{ic(h.get('google_gtx'))} Google gtx: {h.get('google_gtx', '?')}",
             f"{ic(h.get('google_c5'))} Google c5: {h.get('google_c5', '?')}",
         ]
-        if g == "ok" or h.get("free_ok"):
-            lines.append("\n✅ יש מנוע תרגום עובד — ההודעות יתורגמו.")
+        if g == "ok":
+            lines.append("\n✅ Gemini עובד — ההודעות יתורגמו באיכות גבוהה.")
+        elif h.get("gemini_only"):
+            lines.append("\n⏸️ Gemini אזל — הודעות מדולגות עד שהמכסה תתאפס.")
+            lines.append("(GEMINI_ONLY פעיל — לכבות עם GEMINI_ONLY=0)")
+        elif h.get("free_ok"):
+            lines.append("\n✅ Gemini אזל, אבל Google עובד — הודעות יתורגמו (איכות נמוכה).")
         else:
-            lines.append("\n⚠️ אין אף מנוע תרגום — ההודעות יישלחו באנגלית.")
-            lines.append("ה-IP של Render חסום על התרגום החינמי. הפתרון: billing ל-Gemini.")
+            lines.append("\n⚠️ אין אף מנוע תרגום פעיל — הודעות יידלגו.")
         send_message(chat_id, "\n".join(lines), topic_id)
     elif cmd == "/groups":
         handle_groups(chat_id, topic_id)
