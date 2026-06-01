@@ -87,6 +87,24 @@ _JARGON_FIXES = (
     ("אסיה נמוך", "שפל אסיה"),
     ("נמוך אסיה", "שפל אסיה"),
     ("אסיה גבוה", "שיא אסיה"),
+    # 'dumping' literal-translated to garbage
+    ("מזבלות", "מכירת לחץ"),
+    ("המזבלה", "המכירה"),
+    # trading 'session' → 'מושב מסחר' / 'סשן' (Google says 'פגישה' = meeting).
+    # Order matters: longer/specific patterns must come before shorter ones,
+    # otherwise the short rule matches inside the long one and leaves stray ה.
+    ("סוף הפגישה בשוק באסיה", "סוף מושב המסחר באסיה"),
+    ("סוף הפגישה בשוק בלונדון", "סוף מושב המסחר בלונדון"),
+    ("סוף הפגישה בשוק", "סוף מושב המסחר"),
+    ("הפגישה בשוק באסיה", "מושב המסחר באסיה"),
+    ("הפגישה בשוק בלונדון", "מושב המסחר בלונדון"),
+    ("הפגישה בשוק", "מושב המסחר"),
+    ("מפגשי המסחר", "מושבי המסחר"),
+    ("מפגש המסחר", "מושב המסחר"),
+    ("פגישת המסחר", "מושב המסחר"),
+    # 'escalations heating up' → Google mangles 'heating up' into 'arrogant'
+    ("מתנשאות שוב", "מתחממות שוב"),
+    ("מתנשאת שוב", "מתחממת שוב"),
 )
 
 
@@ -216,7 +234,14 @@ _TRANSLATE_RULES = (
     "'LTF'=טווח זמן קצר, 'HTF'=טווח זמן ארוך, 'FVG'=פער FVG, "
     "'overextension'=מתיחת יתר, 'pivot'=נקודת היפוך, "
     "'True Retail Longs'/'TRL'=לונגים קמעונאיים אמיתיים, "
-    "'1R'/'2R'=יחס סיכון (1R/2R, keep number).\n"
+    "'1R'/'2R'=יחס סיכון (1R/2R, keep number), "
+    "'session(s)' (trading)=מושב מסחר/סשן (NEVER 'פגישה'), "
+    "'dumping'/'dump'=מפילה/מכירת לחץ (NEVER 'מזבלה'), "
+    "'Whale Order Data'=נתוני הזמנות לוויתנים, "
+    "'PWL' (Previous Week Low)=PWL (שפל השבוע הקודם), "
+    "'PWH' (Previous Week High)=PWH (שיא השבוע הקודם), "
+    "'dead cat bounce'=קפיצת חתול מת, "
+    "'heating up' (geopolitics)=מתחמם/מתלהט (NEVER 'מתנשא').\n"
     "- Keep in English ONLY: ticker symbols ($BTC, ETH), prices/numbers "
     "(76k, $76,672), and the acronyms 'TWAP'/'VWAP'/'CVD'.\n"
 )
