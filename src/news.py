@@ -244,7 +244,33 @@ _TRANSLATE_RULES = (
     "'heating up' (geopolitics)=מתחמם/מתלהט (NEVER 'מתנשא').\n"
     "- Keep in English ONLY: ticker symbols ($BTC, ETH), prices/numbers "
     "(76k, $76,672), and the acronyms 'TWAP'/'VWAP'/'CVD'.\n"
+    "- ABSOLUTELY NO meta-commentary: do NOT discuss translation choices, "
+    "do NOT mention alternative wordings, do NOT use English connectives "
+    "like 'or', 'but', 'might be', 'more formal', 'is understood', "
+    "'Let's stick to'. Output the FINAL Hebrew sentence and nothing else.\n"
 )
+
+
+_META_MARKERS = (
+    "might be more formal",
+    "let's stick to",
+    "let's use",
+    "is understood",
+    "more natural",
+    "could be translated",
+    "would be better",
+    "(shadow)",
+    "(candle",
+    " or \"",
+    "\" or ",
+)
+
+
+def _looks_like_meta(text):
+    """True if Gemini's output is translator-style commentary rather than a
+    clean Hebrew translation (a real bug seen in production)."""
+    low = (text or "").lower()
+    return any(m in low for m in _META_MARKERS)
 
 
 def _gemini_generate(prompt, max_tokens, temperature=0.2):
@@ -288,10 +314,14 @@ def _gemini_translate_he(text):
 def translate_he(text):
     if not text:
         return text
-    # Primary: Gemini. Accept only if it actually produced Hebrew.
+    # Primary: Gemini. Accept only if it actually produced Hebrew and isn't
+    # translator meta-commentary.
     if _gemini_enabled():
         try:
             out = _fix_he_jargon(_gemini_translate_he(text))
+            if _looks_like_meta(out):
+                print("  ⚠️  Gemini returned meta-commentary, rejecting")
+                out = ""
             if _has_hebrew(out):
                 return out
             print("  ⚠️  Gemini returned non-Hebrew output, trying Google")
@@ -328,6 +358,8 @@ def translate_many(texts):
                 f"{numbered}"
             )
             out = _gemini_generate(prompt, 2048)
+            if _looks_like_meta(out):
+                raise ValueError("batch translate returned meta-commentary")
             parsed = {}
             for line in out.splitlines():
                 m = _BATCH_LINE_RE.match(line)
@@ -376,6 +408,9 @@ def filter_and_translate_tweet(text):
             if out.strip().upper().startswith("SKIP"):
                 return None
             out = _fix_he_jargon(out)
+            if _looks_like_meta(out):
+                print("  ⚠️  Gemini filter+translate returned meta-commentary")
+                out = ""
             if _has_hebrew(out):
                 return out
             print("  ⚠️  Gemini filter+translate gave non-Hebrew")
