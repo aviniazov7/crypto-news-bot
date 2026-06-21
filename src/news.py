@@ -105,6 +105,12 @@ _JARGON_FIXES = (
     # 'escalations heating up' → Google mangles 'heating up' into 'arrogant'
     ("מתנשאות שוב", "מתחממות שוב"),
     ("מתנשאת שוב", "מתחממת שוב"),
+    # Defensive: if 'Bitcoin' was truncated mid-word upstream → 'ביטק'.
+    # Match only at word boundaries so 'ביטקוין' itself is left alone.
+    ("ביטק…", "ביטקוין…"),
+    ("ביטק.", "ביטקוין."),
+    ("ביטק,", "ביטקוין,"),
+    ("ביטק\n", "ביטקוין\n"),
 )
 
 
@@ -530,8 +536,9 @@ def _clean_rss_desc(desc, title, source):
     return desc
 
 
-def smart_trim(text, max_len=400):
-    """Trim text to max_len, ending at a sentence or word boundary if possible."""
+def smart_trim(text, max_len=500):
+    """Trim text to max_len, NEVER ending mid-word.
+    Prefers a sentence boundary in the latter half, else the last space."""
     if len(text) <= max_len:
         return text
     snippet = text[:max_len]
@@ -539,10 +546,11 @@ def smart_trim(text, max_len=400):
         idx = snippet.rfind(marker)
         if idx > max_len * 0.6:
             return snippet[: idx + 1]
+    # Always step back to the last space — never hard-cut mid-word.
     idx = snippet.rfind(" ")
-    if idx > max_len * 0.6:
-        return snippet[:idx]
-    return snippet
+    if idx > 0:
+        return snippet[:idx] + "…"
+    return snippet + "…"
 
 
 def wrap_text(text, width=38):
@@ -609,7 +617,7 @@ def scrape_feed(feed, cutoff):
             continue
         if pub and pub < cutoff:
             continue
-        desc = smart_trim(_clean_rss_desc(desc, title, feed["name"]), 400)
+        desc = smart_trim(_clean_rss_desc(desc, title, feed["name"]), 500)
         items.append({"title": title, "desc": desc, "source": feed["name"], "date": pub})
     if not items:
         ns = {"a": "http://www.w3.org/2005/Atom"}
@@ -623,7 +631,7 @@ def scrape_feed(feed, cutoff):
                 continue
             if pub and pub < cutoff:
                 continue
-            summary = smart_trim(_clean_rss_desc(summary, title, feed["name"]), 400)
+            summary = smart_trim(_clean_rss_desc(summary, title, feed["name"]), 500)
             items.append({"title": title, "desc": summary, "source": feed["name"], "date": pub})
     return items[:MAX_PER_SOURCE]
 
