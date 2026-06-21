@@ -339,10 +339,11 @@ def translate_he(text):
 _BATCH_LINE_RE = re.compile(r"^\s*\[(\d+)\]\s*(.*)$")
 
 
-def translate_many(texts):
+def translate_many(texts, force_fallback=False):
     """Translate a list of strings in ONE Gemini call (saves quota on the
-    briefing). Falls back to translating each item via Google if Gemini is
-    unavailable or the batched output can't be parsed."""
+    briefing). If Gemini fails or is exhausted: when force_fallback=True
+    (e.g. briefing news), fall back to per-item Google so the briefing
+    always shows content; otherwise honour GEMINI_ONLY and return empties."""
     texts = [t or "" for t in texts]
     if not texts:
         return []
@@ -372,11 +373,11 @@ def translate_many(texts):
             print("  ⚠️  Batch translate parse mismatch")
         except Exception as e:
             print(f"  ⚠️  Batch Gemini translate failed: {e}")
-    # Gemini-only mode (default): return empties so callers skip the items
-    # rather than degrading to Google quality. Set GEMINI_ONLY=0 to allow
-    # Google fallback (lower quality but more coverage).
-    if os.environ.get("GEMINI_ONLY", "1") == "1":
+    # Caller can force the Google fallback (e.g. the briefing) so news is
+    # never empty; otherwise honour GEMINI_ONLY mode (default for tweets).
+    if not force_fallback and os.environ.get("GEMINI_ONLY", "1") == "1":
         return ["" for _ in texts]
+    return [translate_he(t) for t in texts]
     return [translate_he(t) for t in texts]
 
 
@@ -767,7 +768,7 @@ def build_briefing(news, prices):
             to_translate.append(item["title"])
             desc = (item.get("desc") or "").strip()
             to_translate.append(desc if len(desc) > 30 else "")
-        translated = translate_many(to_translate)
+        translated = translate_many(to_translate, force_fallback=True)
 
         # Hebrew-only: keep an item only if its title actually translated.
         news_lines = []
@@ -850,7 +851,7 @@ def build_news_message(news):
         to_translate.append(item["title"])
         desc = (item.get("desc") or "").strip()
         to_translate.append(desc if len(desc) > 30 else "")
-    translated = translate_many(to_translate)
+    translated = translate_many(to_translate, force_fallback=True)
 
     n = 0
     for i in range(len(top)):
