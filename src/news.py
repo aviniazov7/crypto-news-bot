@@ -111,6 +111,16 @@ _JARGON_FIXES = (
     ("ביטק.", "ביטקוין."),
     ("ביטק,", "ביטקוין,"),
     ("ביטק\n", "ביטקוין\n"),
+    # 'shorts' (trading) sometimes comes out as 'שוטרים' (police). In a
+    # crypto bot context this is almost always the mistranslation.
+    ("שוטרים", "שורטים"),
+    # 'cheap fees' → 'עמלות זילות' (scorn) instead of 'עמלות זולות' (cheap).
+    ("עמלות זילות", "עמלות זולות"),
+    ("עמלת זילות", "עמלת זולות"),
+    ("זילות ביותר", "זולות ביותר"),
+    ('ל"זילות', 'לזולות'),
+    # 'mechanism' came out as 'גנגנון' (not a real Hebrew word).
+    ("גנגנון", "מנגנון"),
 )
 
 
@@ -223,9 +233,11 @@ _TRANSLATE_RULES = (
     "phrases, headlines, and trading jargon. Do NOT leave English words "
     "untranslated just because they look like a name or are capitalized. "
     "The ONLY things that stay in English are listed below.\n"
-    "- Trading terms: short(s)=שורט/שורטים, long(s)=לונג/לונגים, "
-    "buy the dip=קניית הירידה, pump=פאמפ, dump=מפולת, bullish=שורי, "
-    "bearish=דובי, scalp/scalping=סקאלפ (NEVER קרקפת), long scalp=סקאלפ לונג.\n"
+    "- Trading terms: short(s)=שורט/שורטים (NEVER 'שוטרים'/police), "
+    "long(s)=לונג/לונגים, buy the dip=קניית הירידה, pump=פאמפ, dump=מפולת, "
+    "bullish=שורי, bearish=דובי, scalp/scalping=סקאלפ (NEVER קרקפת), "
+    "long scalp=סקאלפ לונג, cheap fees=עמלות זולות (NEVER 'זילות'/scorn), "
+    "mechanism=מנגנון (NEVER 'גנגנון').\n"
     "- Trading abbreviations: 'PA'=פעולת מחיר (price action, NEVER "
     "'הרשות הפלסטינית'), 'lev'/'leverage'=מינוף (NEVER 'לב'/heart), "
     "'high lev'=מינוף גבוה, 'liq'/'liquidation'=חיסול, "
