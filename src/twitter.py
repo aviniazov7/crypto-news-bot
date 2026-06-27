@@ -290,8 +290,15 @@ def format_tweet_message(tweet):
 def tweet_raw_text(tweet):
     """Stripped, length-capped source text for translation.
     Telegram photo caption cap is 1024; Hebrew is ~2x as char-dense as the
-    English source, so cap raw input around 900 chars."""
-    return _strip_news_prefix(tweet.get("text") or "")[:900]
+    English source, so cap raw input around 900 chars. Never cut mid-word —
+    otherwise Gemini translates the partial word and the Hebrew ends mid-word
+    too (e.g. 'after closing' → 'after clos' → 'לאחר סג')."""
+    text = _strip_news_prefix(tweet.get("text") or "")
+    if len(text) <= 900:
+        return text
+    snippet = text[:900]
+    idx = snippet.rfind(" ")
+    return (snippet[:idx] if idx > 0 else snippet) + "…"
 
 
 def format_caption(text_he):
