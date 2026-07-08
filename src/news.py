@@ -115,6 +115,11 @@ _JARGON_FIXES = (
     ("ביטק.", "ביטקוין."),
     ("ביטק,", "ביטקוין,"),
     ("ביטק\n", "ביטקוין\n"),
+    ("ביטקוי ", "ביטקוין "),
+    ("ביטקוי…", "ביטקוין…"),
+    ("ביטקוי.", "ביטקוין."),
+    ("ביטקוי,", "ביטקוין,"),
+    ("ביטקוי\n", "ביטקוין\n"),
     # 'shorts' (trading) sometimes comes out as 'שוטרים' (police). In a
     # crypto bot context this is almost always the mistranslation.
     ("שוטרים", "שורטים"),
