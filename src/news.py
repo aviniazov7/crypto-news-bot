@@ -28,8 +28,8 @@ COIN_SYMBOLS = [
 ]
 # Macro assets shown alongside crypto (Yahoo Finance symbols).
 MACRO_SYMBOLS = [
-    ("GC=F", "🥇 זהב Gold"),
-    ("CL=F", "🛢️ נפט Oil"),
+    ("GC=F", "🥇 Gold"),
+    ("CL=F", "🛢️ Oil"),
     ("QQQ", "📈 QQQ"),
 ]
 HOURS_BACK = 8
@@ -867,6 +867,8 @@ def build_briefing(news, prices):
             digest = summarize_news(top)
             if not digest or digest.startswith("⚠️") or not _has_hebrew(digest):
                 digest = None
+            else:
+                digest = _fix_he_jargon(digest)
 
         if digest:
             L.append(f"{R}📰 מה חדש היום:")
