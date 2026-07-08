@@ -45,7 +45,11 @@ def summarize_news(news_items):
         "contents": [{"parts": [{"text": prompt}]}],
         "generationConfig": {
             "temperature": 0.7,
-            "maxOutputTokens": 500,
+            # gemini-2.5-flash "thinks" by default and thinking tokens count
+            # against maxOutputTokens — with a small cap the visible answer
+            # comes back empty/truncated. Disable thinking and give headroom.
+            "maxOutputTokens": 1024,
+            "thinkingConfig": {"thinkingBudget": 0},
         },
     }).encode("utf-8")
 
