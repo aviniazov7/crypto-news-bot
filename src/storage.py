@@ -156,6 +156,20 @@ def add_recent_text(handle, text):
             _save(data)
 
 
+def get_meta(key, default=None):
+    """Read a small persistent key (e.g. last briefing slot)."""
+    data = _load()
+    return data.get("meta", {}).get(key, default)
+
+
+def set_meta(key, value):
+    """Persist a small key that must survive deploys/restarts."""
+    with _lock:
+        data = _load()
+        data.setdefault("meta", {})[key] = value
+        _save(data)
+
+
 def add_group(chat_id, name="", topic_id=None):
     """Add/update a group. Returns True if newly added."""
     with _lock:
