@@ -280,6 +280,8 @@ _TRANSLATE_RULES = (
     "do NOT mention alternative wordings, do NOT use English connectives "
     "like 'or', 'but', 'might be', 'more formal', 'is understood', "
     "'Let's stick to'. Output the FINAL Hebrew sentence and nothing else.\n"
+    "- If the source text is cut off mid-sentence, translate only the "
+    "complete part and end on a complete sentence.\n"
 )
 
 
@@ -291,18 +293,29 @@ _META_MARKERS = (
     "more natural",
     "could be translated",
     "would be better",
+    "sounds odd",
+    "sounds very odd",
+    "sounds strange",
+    "what if",
+    "is used?",
     "(shadow)",
     "(candle",
     " or \"",
     "\" or ",
 )
 
+# A run of 4+ consecutive English words inside a "Hebrew" translation is a
+# leak (legit output only keeps tickers/acronyms/short names in English).
+_ENGLISH_RUN_RE = re.compile(r"(?:\b[A-Za-z]{2,}\b[\s,]+){3,}\b[A-Za-z]{2,}\b")
+
 
 def _looks_like_meta(text):
     """True if Gemini's output is translator-style commentary rather than a
     clean Hebrew translation (a real bug seen in production)."""
     low = (text or "").lower()
-    return any(m in low for m in _META_MARKERS)
+    if any(m in low for m in _META_MARKERS):
+        return True
+    return bool(_ENGLISH_RUN_RE.search(text or ""))
 
 
 def _gemini_generate(prompt, max_tokens, temperature=0.2):
@@ -315,7 +328,13 @@ def _gemini_generate(prompt, max_tokens, temperature=0.2):
     _gemini_count += 1
     payload = json.dumps({
         "contents": [{"parts": [{"text": prompt}]}],
-        "generationConfig": {"temperature": temperature, "maxOutputTokens": max_tokens},
+        "generationConfig": {
+            "temperature": temperature,
+            "maxOutputTokens": max_tokens,
+            # Disable gemini-2.5 'thinking' — its tokens count against
+            # maxOutputTokens and can silently truncate/empty the output.
+            "thinkingConfig": {"thinkingBudget": 0},
+        },
     }).encode("utf-8")
     url = f"https://generativelanguage.googleapis.com/v1beta/models/{_GEMINI_MODEL}:generateContent?key={_GEMINI_KEY}"
     req = urllib.request.Request(
@@ -740,7 +759,7 @@ def _market_mood(prices):
     if btc <= -5 and avg_alts <= -5:
         return "🔴 יום אדום — מכירה רחבה"
     if btc <= -2 and avg_alts <= -2:
-        return "🟠 השוק בירידה — חלשות רחבה"
+        return "🟠 השוק בירידה — חולשה רחבה"
     if avg_alts >= 2 and avg_alts >= btc + 1.5:
         return "🟢 אלטים מובילים — Risk-On"
     if btc >= 2 and avg_alts >= 1:
