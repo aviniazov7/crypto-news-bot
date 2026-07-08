@@ -5,11 +5,28 @@ Summarizes crypto news into concise Hebrew bullet points.
 
 import json
 import os
+import re
 import urllib.request
 
 
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
 GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash")
+
+
+def _clean_summary(text):
+    """Strip markdown artifacts and preamble lines — Telegram shows raw text,
+    so '**' and '*' bullets would appear literally."""
+    text = text.replace("**", "")
+    lines = []
+    for line in text.splitlines():
+        line = re.sub(r"^\s*[\*\-•·]+\s*", "", line).rstrip()
+        lines.append(line)
+    # Drop a leading "הנה סיכום..." preamble line
+    while lines and (not lines[0].strip() or (
+        "סיכום" in lines[0] and lines[0].strip().endswith(":")
+    )):
+        lines.pop(0)
+    return "\n".join(lines).strip()
 
 
 def summarize_news(news_items):
@@ -34,11 +51,17 @@ def summarize_news(news_items):
 
     prompt = (
         "You are a crypto market analyst writing for Hebrew-speaking traders.\n"
-        "Summarize the following crypto news headlines into 3-5 concise bullet points in Hebrew.\n"
+        "Summarize the following crypto news headlines in Hebrew as 3-4 short "
+        "paragraphs. Each paragraph: 1-2 sentences, starts with one fitting "
+        "emoji, separated by a blank line.\n"
         "Focus on: market impact, key events, and actionable insights.\n"
-        "Use emojis for visual clarity. Keep each bullet to 1-2 sentences.\n\n"
+        "STRICT format rules:\n"
+        "- Plain text ONLY: no markdown, no asterisks, no bullets, no "
+        "numbering, no bold.\n"
+        "- Start DIRECTLY with the first paragraph — no preamble or intro "
+        "line like 'הנה סיכום'.\n\n"
         f"Headlines:\n{headlines_text}\n\n"
-        "Write the summary in Hebrew:"
+        "Summary:"
     )
 
     payload = json.dumps({
@@ -68,10 +91,16 @@ def summarize_news(news_items):
             if candidates:
                 parts = candidates[0].get("content", {}).get("parts", [])
                 if parts:
-                    summary = parts[0].get("text", "").strip()
+                    summary = _clean_summary(parts[0].get("text", "").strip())
                     if summary:
                         R = "\u200F"
-                        return f"{R}🤖 סיכום AI:\n\n{R}{summary}"
+                        # RTL-mark every line so multi-paragraph text renders
+                        # right-aligned in Telegram.
+                        body = "\n".join(
+                            f"{R}{line}" if line.strip() else line
+                            for line in summary.splitlines()
+                        )
+                        return f"{R}🤖 סיכום AI:\n\n{body}"
         return "⚠️ לא הצלחתי ליצור סיכום כרגע"
     except urllib.error.HTTPError as e:
         body = e.read().decode() if e.fp else ""
