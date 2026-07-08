@@ -31,7 +31,11 @@ COIN_SYMBOLS = [
 ]
 HOURS_BACK = 8
 MAX_PER_SOURCE = 3
-ISRAEL_TZ = timezone(timedelta(hours=3))
+try:
+    from zoneinfo import ZoneInfo
+    ISRAEL_TZ = ZoneInfo("Asia/Jerusalem")
+except Exception:
+    ISRAEL_TZ = timezone(timedelta(hours=3))
 
 # ── Helpers ─────────────────────────────────────────────────────────
 
@@ -225,6 +229,16 @@ def gemini_budget_status():
     """(used, budget) for /health."""
     _gemini_budget_left()  # refresh day rollover
     return _gemini_count, _GEMINI_DAILY_BUDGET
+
+
+def _consume_gemini_budget():
+    """Reserve one budgeted Gemini call for code that bypasses
+    _gemini_generate (e.g. ai_summary). True if a call was reserved."""
+    global _gemini_count
+    if not _gemini_enabled():
+        return False
+    _gemini_count += 1
+    return True
 
 
 _TRANSLATE_RULES = (
@@ -809,9 +823,15 @@ def build_briefing(news, prices):
             L.append("")
             L.extend(news_lines)
 
-        # AI summary is off by default to conserve the daily Gemini budget
-        # (the items above are already translated). Enable with BRIEFING_AI_SUMMARY=1.
-        if news_lines and GEMINI_API_KEY and os.environ.get("BRIEFING_AI_SUMMARY", "0") == "1":
+        # AI summary — on by default now that briefings run only twice a day.
+        # Counts against the daily Gemini budget; skipped when it's spent.
+        # Disable with BRIEFING_AI_SUMMARY=0.
+        if (
+            news_lines
+            and GEMINI_API_KEY
+            and os.environ.get("BRIEFING_AI_SUMMARY", "1") == "1"
+            and _consume_gemini_budget()
+        ):
             summary = summarize_news(news[:5])
             if summary and not summary.startswith("⚠️"):
                 L.append("")

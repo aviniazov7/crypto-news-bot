@@ -8,7 +8,7 @@ import os
 import sys
 import time
 import urllib.request
-from datetime import timezone, timedelta
+from datetime import datetime, timezone, timedelta
 
 import news
 import twitter
@@ -18,10 +18,37 @@ import storage
 TELEGRAM_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "")
 ADMIN_ID = os.environ.get("ADMIN_ID", "")
 TWITTER_CHECK_INTERVAL = 300   # 5 minutes
-# Briefing cadence in hours (env-configurable). Fewer briefings = less daily
-# Gemini quota spent. Default 12h (2/day) to fit the free Gemini tier.
-BRIEFING_INTERVAL = int(os.environ.get("BRIEFING_INTERVAL_HOURS", "12")) * 3600
-ISRAEL_TZ = timezone(timedelta(hours=3))
+
+# Real Israel timezone (handles DST); fall back to fixed UTC+3 if tzdata
+# is missing from the container image.
+try:
+    from zoneinfo import ZoneInfo
+    ISRAEL_TZ = ZoneInfo("Asia/Jerusalem")
+except Exception:
+    ISRAEL_TZ = timezone(timedelta(hours=3))
+
+
+def _parse_briefing_times(raw):
+    """'08:00,20:00' → [(8, 0), (20, 0)], sorted. Falls back to defaults."""
+    times = []
+    for part in raw.split(","):
+        part = part.strip()
+        if not part:
+            continue
+        try:
+            hh, _, mm = part.partition(":")
+            h, m = int(hh), int(mm or 0)
+            if 0 <= h <= 23 and 0 <= m <= 59:
+                times.append((h, m))
+        except ValueError:
+            continue
+    return sorted(times) or [(8, 0), (20, 0)]
+
+
+# Fixed daily briefing times (Israel time), env-configurable. Fixed clock
+# times — unlike an interval — survive deploys/restarts without drifting.
+BRIEFING_TIMES = _parse_briefing_times(os.environ.get("BRIEFING_TIMES", "08:00,20:00"))
+BRIEFING_TIMES_STR = ", ".join(f"{h:02d}:{m:02d}" for h, m in BRIEFING_TIMES)
 
 API_BASE = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}"
 
@@ -145,7 +172,7 @@ def handle_start(chat_id, topic_id=None, chat_name=""):
     acc_text = ", ".join(f"@{a}" for a in accounts) if accounts else "None"
     text = (
         "🤖 Crypto News Bot — Ready!\n\n"
-        f"📡 Auto-briefing every {BRIEFING_INTERVAL // 3600}h to this chat\n"
+        f"📡 Auto-briefing daily at {BRIEFING_TIMES_STR} (Israel) to this chat\n"
         f"🐦 Tracking: {acc_text}\n\n"
         "━━━━━━━━━━━━━━━━━━━\n"
         "📋 Admin Commands:\n"
@@ -401,7 +428,7 @@ def process_my_chat_member(event):
                 send_message(
                     ADMIN_ID,
                     f"✅ Added to group: {chat_name}\nID: {chat_id}\n\n"
-                    f"Briefings will arrive every {BRIEFING_INTERVAL // 3600}h.\n"
+                    f"Briefings will arrive daily at {BRIEFING_TIMES_STR} (Israel).\n"
                     "To pin them to a specific topic in a forum, send "
                     "/setup@<this_bot> inside that topic.",
                 )
@@ -451,7 +478,30 @@ class CryptoBot:
     def __init__(self):
         self.offset = 0
         self.last_twitter_check = 0
-        self.last_briefing = 0
+
+    def _due_briefing_slot(self):
+        """Return a slot id ('2026-06-28 08:00') when a briefing is due.
+
+        Finds the most recent scheduled time that has already passed and
+        checks (via persistent storage) whether it was sent. Deploys and
+        restarts therefore never shift the schedule, double-send, or skip
+        a slot — a missed slot is sent late, as soon as the bot is back up.
+        """
+        now_il = datetime.now(ISRAEL_TZ)
+        latest = None
+        for h, m in BRIEFING_TIMES:
+            slot = now_il.replace(hour=h, minute=m, second=0, microsecond=0)
+            if slot <= now_il and (latest is None or slot > latest):
+                latest = slot
+        if latest is None:  # before today's first slot → yesterday's last slot
+            h, m = BRIEFING_TIMES[-1]
+            latest = (now_il - timedelta(days=1)).replace(
+                hour=h, minute=m, second=0, microsecond=0
+            )
+        slot_id = latest.strftime("%Y-%m-%d %H:%M")
+        if storage.get_meta("last_briefing_slot") != slot_id:
+            return slot_id
+        return None
 
     def run(self):
         if not TELEGRAM_TOKEN:
@@ -462,9 +512,8 @@ class CryptoBot:
 
         print("🚀 Crypto News Bot starting (auto-send mode)...")
         set_bot_commands()
-        print(f"📡 Briefing every {BRIEFING_INTERVAL // 3600}h | Twitter check every {TWITTER_CHECK_INTERVAL // 60}min")
+        print(f"📡 Briefing daily at {BRIEFING_TIMES_STR} (Israel) | Twitter check every {TWITTER_CHECK_INTERVAL // 60}min")
 
-        self.last_briefing = time.time()
         self.last_twitter_check = time.time()
 
         print("🔄 Polling for updates...")
@@ -509,8 +558,10 @@ class CryptoBot:
             except Exception as e:
                 print(f"  ⚠️  Twitter check: {e}")
 
-        if now - self.last_briefing >= BRIEFING_INTERVAL:
-            self.last_briefing = now
+        slot_id = self._due_briefing_slot()
+        if slot_id:
+            # Mark first so a mid-send crash can't spam the group in a loop.
+            storage.set_meta("last_briefing_slot", slot_id)
             try:
                 send_auto_briefing()
             except Exception as e:
