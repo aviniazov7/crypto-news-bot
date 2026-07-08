@@ -22,12 +22,15 @@ RSS_FEEDS = [
     {"name": "Decrypt",          "url": "https://decrypt.co/feed"},
 ]
 
-COINS = "bitcoin,ethereum,binancecoin,solana,ripple,cardano,dogecoin,tron,avalanche-2,chainlink"
+COINS = "bitcoin,ethereum,solana"
 COIN_SYMBOLS = [
-    ("bitcoin", "BTC"), ("ethereum", "ETH"), ("binancecoin", "BNB"),
-    ("solana", "SOL"), ("ripple", "XRP"), ("cardano", "ADA"),
-    ("dogecoin", "DOGE"), ("tron", "TRX"), ("avalanche-2", "AVAX"),
-    ("chainlink", "LINK"),
+    ("bitcoin", "BTC"), ("ethereum", "ETH"), ("solana", "SOL"),
+]
+# Macro assets shown alongside crypto (Yahoo Finance symbols).
+MACRO_SYMBOLS = [
+    ("GC=F", "🥇 זהב"),
+    ("CL=F", "🛢️ נפט"),
+    ("QQQ", "📈 QQQ"),
 ]
 HOURS_BACK = 8
 MAX_PER_SOURCE = 3
@@ -724,6 +727,29 @@ def fetch_prices():
         return {}
 
 
+def fetch_macro():
+    """Gold / oil / QQQ via Yahoo Finance (free, no key).
+    Returns [(label, price, pct_change)], skipping symbols that fail."""
+    results = []
+    for symbol, label in MACRO_SYMBOLS:
+        try:
+            url = (
+                "https://query1.finance.yahoo.com/v8/finance/chart/"
+                f"{urllib.parse.quote(symbol)}?interval=1d&range=2d"
+            )
+            data = json.loads(http_get(url, extra_headers={"User-Agent": "Mozilla/5.0"}))
+            meta = data["chart"]["result"][0]["meta"]
+            price = meta.get("regularMarketPrice")
+            prev = meta.get("chartPreviousClose") or meta.get("previousClose")
+            if price is None or not prev:
+                continue
+            change = (price / prev - 1) * 100
+            results.append((label, price, change))
+        except Exception as e:
+            print(f"  ⚠️  Yahoo {symbol}: {e}")
+    return results
+
+
 def fetch_fear_greed():
     """Crypto Fear & Greed Index (0–100). Returns (value, color_emoji)."""
     try:
@@ -816,6 +842,14 @@ def build_briefing(news, prices):
             arrow = "▲" if ch >= 0 else "▼"
             ps = f"${p:,.0f}" if p >= 1000 else f"${p:,.2f}" if p >= 1 else f"${p:.4f}"
             L.append(f"{R}  {arrow} {sym}  {ps}  ({ch:+.1f}%)")
+
+        macro = fetch_macro()
+        if macro:
+            L.append("")
+            for label, p, ch in macro:
+                arrow = "▲" if ch >= 0 else "▼"
+                ps = f"${p:,.0f}" if p >= 1000 else f"${p:,.2f}"
+                L.append(f"{R}  {arrow} {label}  {ps}  ({ch:+.1f}%)")
         L.append("")
 
     if news:
@@ -895,6 +929,14 @@ def build_prices_message(prices):
         arrow = "▲" if ch >= 0 else "▼"
         ps = f"${p:,.0f}" if p >= 1000 else f"${p:,.2f}" if p >= 1 else f"${p:.4f}"
         L.append(f"{R}  {arrow} {sym}  {ps}  ({ch:+.1f}%)")
+
+    macro = fetch_macro()
+    if macro:
+        L.append("")
+        for label, p, ch in macro:
+            arrow = "▲" if ch >= 0 else "▼"
+            ps = f"${p:,.0f}" if p >= 1000 else f"${p:,.2f}"
+            L.append(f"{R}  {arrow} {label}  {ps}  ({ch:+.1f}%)")
 
     return "\n".join(L)
 
