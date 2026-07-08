@@ -264,6 +264,43 @@ def check_account(handle):
     return new_tweets
 
 
+def diagnose_account(handle):
+    """Dry-run diagnostics for /check: which Nitter instance answers, how many
+    tweets sit in the feed, and where each new one would be filtered.
+    Modifies no state."""
+    info = {"handle": handle, "instance": None, "feed": 0, "new": 0,
+            "promo": 0, "offtopic": 0, "dup": 0, "sendable": 0}
+    xml_text = None
+    for instance in NITTER_INSTANCES:
+        try:
+            data = http_get(f"{instance}/{handle}/rss", timeout=10)
+            text = data.decode("utf-8", errors="replace")
+            if "<item>" in text or "<entry" in text:
+                xml_text = text
+                info["instance"] = instance
+                break
+        except Exception:
+            continue
+    if not xml_text:
+        return info
+    tweets = _parse_tweets(handle, xml_text)
+    info["feed"] = len(tweets)
+    for tweet in tweets:
+        if storage.is_seen(handle, tweet["id"]):
+            continue
+        info["new"] += 1
+        text = tweet.get("text", "")
+        if is_promotional(text):
+            info["promo"] += 1
+        elif not is_crypto_relevant(text):
+            info["offtopic"] += 1
+        elif storage.has_recent_text(handle, text):
+            info["dup"] += 1
+        else:
+            info["sendable"] += 1
+    return info
+
+
 def check_all_accounts():
     """Check all tracked accounts for new tweets. Returns dict: handle → [tweets]."""
     accounts = storage.list_accounts()
