@@ -854,46 +854,51 @@ def build_briefing(news, prices):
 
     if news:
         top = news[:5]
-        # Batch all titles + descriptions into a single translation call.
-        to_translate = []
-        for item in top:
-            to_translate.append(item["title"])
-            desc = (item.get("desc") or "").strip()
-            to_translate.append(desc if len(desc) > 30 else "")
-        translated = translate_many(to_translate, force_fallback=True)
 
-        # Hebrew-only: keep an item only if its title actually translated.
-        news_lines = []
-        n = 0
-        for i in range(len(top)):
-            title_he = translated[i * 2]
-            if not _has_hebrew(title_he):
-                continue  # skip untranslated item (never show English)
-            n += 1
-            news_lines.append(f"{R}{n}. {bidi_fix(title_he)}")
-            desc_he = translated[i * 2 + 1]
-            if desc_he and _has_hebrew(desc_he):
-                news_lines.append(f"{R}   {bidi_fix(desc_he)}")
-            news_lines.append("")
-
-        if news_lines:
-            L.append(f"{R}📰 מה חדש היום:")
-            L.append("")
-            L.extend(news_lines)
-
-        # AI summary — on by default now that briefings run only twice a day.
-        # Counts against the daily Gemini budget; skipped when it's spent.
-        # Disable with BRIEFING_AI_SUMMARY=0.
+        # Primary: ONE AI call turns the day's items into a clean digest —
+        # emoji-led paragraphs (no numbering) ending with a 🎯 bottom line.
+        # Counts against the daily Gemini budget. Disable: BRIEFING_AI_SUMMARY=0.
+        digest = None
         if (
-            news_lines
-            and GEMINI_API_KEY
+            GEMINI_API_KEY
             and os.environ.get("BRIEFING_AI_SUMMARY", "1") == "1"
             and _consume_gemini_budget()
         ):
-            summary = summarize_news(news[:5])
-            if summary and not summary.startswith("⚠️"):
+            digest = summarize_news(top)
+            if not digest or digest.startswith("⚠️") or not _has_hebrew(digest):
+                digest = None
+
+        if digest:
+            L.append(f"{R}📰 מה חדש היום:")
+            L.append("")
+            L.append(digest)
+        else:
+            # Fallback: translated numbered list (Google fallback allowed)
+            # so the briefing still carries news when the digest fails.
+            to_translate = []
+            for item in top:
+                to_translate.append(item["title"])
+                desc = (item.get("desc") or "").strip()
+                to_translate.append(desc if len(desc) > 30 else "")
+            translated = translate_many(to_translate, force_fallback=True)
+
+            news_lines = []
+            n = 0
+            for i in range(len(top)):
+                title_he = translated[i * 2]
+                if not _has_hebrew(title_he):
+                    continue  # skip untranslated item (never show English)
+                n += 1
+                news_lines.append(f"{R}{n}. {bidi_fix(title_he)}")
+                desc_he = translated[i * 2 + 1]
+                if desc_he and _has_hebrew(desc_he):
+                    news_lines.append(f"{R}   {bidi_fix(desc_he)}")
+                news_lines.append("")
+
+            if news_lines:
+                L.append(f"{R}📰 מה חדש היום:")
                 L.append("")
-                L.append(summary)
+                L.extend(news_lines)
 
     return "\n".join(L)
 def build_prices_message(prices):
