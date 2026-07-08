@@ -51,17 +51,18 @@ def summarize_news(news_items):
 
     prompt = (
         "You are a crypto market analyst writing for Hebrew-speaking traders.\n"
-        "Summarize the following crypto news headlines in Hebrew as 3-4 short "
-        "paragraphs. Each paragraph: 1-2 sentences, starts with one fitting "
-        "emoji, separated by a blank line.\n"
-        "Focus on: market impact, key events, and actionable insights.\n"
+        "The reader has ALREADY seen the full headlines below — do NOT repeat "
+        "or re-describe them item by item.\n"
+        "Write ONE short 'bottom line' paragraph in Hebrew (2-4 sentences) "
+        "that adds value ON TOP of the headlines: the combined market "
+        "picture, the main risk right now, and the one thing worth watching "
+        "next. Connect the dots between the stories.\n"
         "STRICT format rules:\n"
-        "- Plain text ONLY: no markdown, no asterisks, no bullets, no "
-        "numbering, no bold.\n"
-        "- Start DIRECTLY with the first paragraph — no preamble or intro "
-        "line like 'הנה סיכום'.\n\n"
-        f"Headlines:\n{headlines_text}\n\n"
-        "Summary:"
+        "- ONE paragraph only. Plain text: no markdown, no asterisks, no "
+        "bullets, no numbering, no bold.\n"
+        "- Start DIRECTLY with the content — no preamble or intro line.\n\n"
+        f"Headlines (already shown to the reader):\n{headlines_text}\n\n"
+        "Bottom line:"
     )
 
     payload = json.dumps({
@@ -100,7 +101,7 @@ def summarize_news(news_items):
                             f"{R}{line}" if line.strip() else line
                             for line in summary.splitlines()
                         )
-                        return f"{R}🤖 סיכום AI:\n\n{body}"
+                        return f"{R}🎯 שורה תחתונה:\n\n{body}"
         return "⚠️ לא הצלחתי ליצור סיכום כרגע"
     except urllib.error.HTTPError as e:
         body = e.read().decode() if e.fp else ""
