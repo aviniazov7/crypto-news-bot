@@ -44,8 +44,15 @@ def summarize_news(news_items):
     headlines = []
     for i, item in enumerate(news_items[:10], 1):
         line = f"{i}. {item['title']}"
-        if item.get("desc"):
-            line += f" — {item['desc'][:100]}"
+        desc = (item.get("desc") or "").strip()
+        if desc:
+            # Trim on a word boundary — a mid-word cut ('Bitcoi') makes the
+            # model reproduce the broken word in Hebrew ('ביטקוי').
+            if len(desc) > 160:
+                snippet = desc[:160]
+                idx = snippet.rfind(" ")
+                desc = (snippet[:idx] if idx > 0 else snippet) + "…"
+            line += f" — {desc}"
         headlines.append(line)
     headlines_text = "\n".join(headlines)
 
