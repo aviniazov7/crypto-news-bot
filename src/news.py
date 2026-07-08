@@ -28,8 +28,8 @@ COIN_SYMBOLS = [
 ]
 # Macro assets shown alongside crypto (Yahoo Finance symbols).
 MACRO_SYMBOLS = [
-    ("GC=F", "🥇 זהב"),
-    ("CL=F", "🛢️ נפט"),
+    ("GC=F", "🥇 זהב Gold"),
+    ("CL=F", "🛢️ נפט Oil"),
     ("QQQ", "📈 QQQ"),
 ]
 HOURS_BACK = 8
