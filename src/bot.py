@@ -148,6 +148,7 @@ def set_bot_commands():
         {"command": "remove", "description": "Untrack a Twitter account"},
         {"command": "groups", "description": "Manage groups"},
         {"command": "health", "description": "Check translation engines"},
+        {"command": "check", "description": "Diagnose tracked accounts"},
     ]
     # Remove commands for all users (default scope)
     tg_request("deleteMyCommands", {})
@@ -382,6 +383,32 @@ def process_message(msg):
         else:
             lines.append("\n⚠️ אין אף מנוע תרגום פעיל — הודעות יידלגו.")
         send_message(chat_id, "\n".join(lines), topic_id)
+    elif cmd == "/check":
+        accounts = storage.list_accounts()
+        R = "‏"
+        if not accounts:
+            send_message(chat_id, f"{R}אין חשבונות במעקב — הוסף עם /add", topic_id)
+        else:
+            send_message(chat_id, f"{R}🔍 בודק {len(accounts)} חשבונות...", topic_id)
+            lines = [f"{R}🔍 אבחון חשבונות:"]
+            for h in accounts:
+                d = twitter.diagnose_account(h)
+                if not d["instance"]:
+                    lines.append(f"{R}❌ @{h} — אף שרת Nitter לא זמין (אין דרך למשוך ציוצים)")
+                elif d["feed"] == 0:
+                    lines.append(f"{R}⚠️ @{h} — הפיד ריק")
+                else:
+                    lines.append(
+                        f"{R}✅ @{h} — {d['feed']} בפיד | {d['new']} חדשים | "
+                        f"{d['sendable']} ראויים לשליחה "
+                        f"(פרסומת: {d['promo']}, לא-קריפטו: {d['offtopic']}, כפולים: {d['dup']})"
+                    )
+            used, budget = news.gemini_budget_status()
+            lines.append("")
+            lines.append(f"{R}מכסת Gemini היום: {used}/{budget}")
+            if used >= budget:
+                lines.append(f"{R}⚠️ המכסה נגמרה — ציוצים חדשים ידולגו עד האיפוס (~10:00), גם אם הם ראויים לשליחה.")
+            send_message(chat_id, "\n".join(lines), topic_id)
     elif cmd == "/groups":
         handle_groups(chat_id, topic_id)
     elif cmd == "/enable":
