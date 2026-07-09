@@ -164,6 +164,20 @@ _PROMO_PATTERNS = (
     r"\b(?:live|streaming)\s+now\b|\bgoing\s+live\b",
     r"\bfull\s+(?:video|analysis|breakdown)\s+(?:here|below|now|on\s+youtube)\b",
     r"\blink\s+(?:below|in\s+(?:the\s+)?(?:comments|replies|thread))\b",
+    # Engagement bait / PnL-flex referral cards (e.g. Bitunix 'Long 20X +17.93%'
+    # share images with a referral QR — the text usually asks 'who else is in?')
+    r"\bwho(?:'s| is| else)\s+(?:else\s+)?(?:in|got\s+in|caught|entered|bought|longed|shorted|riding|aped?)\b",
+    r"\bentry\s+price\b.*\blast\s+price\b",
+    r"\b(?:long|short)\s+\d{1,3}x\b",
+    r"\bvip\s+only\b",
+    # Presale / mint / moonshot shilling
+    r"\bpre[- ]?sale\s+(?:is\s+)?(?:live|open|now|soon)\b",
+    r"\bwhitelist\s+(?:spots?|open|now)\b",
+    r"\bmint(?:ing)?\s+(?:is\s+)?(?:live|now|open|soon)\b",
+    r"\b(?:10|100|1000)x\s+(?:gem|potential|coin|token)\b",
+    r"\bnext\s+(?:10|100|1000)x\b",
+    r"\bdon'?t\s+miss\s+(?:out|this)\b",
+    r"\b(?:like|rt|retweet)\s*(?:&|and|\+)\s*(?:rt|retweet|follow|share|comment)\b",
 )
 _PROMO_RE = re.compile("|".join(_PROMO_PATTERNS), re.IGNORECASE)
 

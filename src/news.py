@@ -451,12 +451,20 @@ def filter_and_translate_tweet(text):
     if _gemini_enabled():
         try:
             prompt = (
-                "You are a filter+translator for a crypto/finance news bot.\n"
-                "STEP 1 — If the post is off-topic (politics, war, crime, sports, "
-                "entertainment, generic tech, personal life) OR low-value with no "
-                "concrete market info (meme, joke, sarcastic 'playbook', vague "
-                "hype, gm/wagmi one-liner), output exactly the single word SKIP "
-                "and nothing else.\n"
+                "You are a filter+translator for a crypto trading group's "
+                "news bot. The group wants ONLY real market information.\n"
+                "STEP 1 — Output exactly the single word SKIP (and nothing "
+                "else) if the post is:\n"
+                "(a) off-topic: politics, war, crime, sports, entertainment, "
+                "generic tech, personal life;\n"
+                "(b) low-value with no concrete market info: meme, joke, "
+                "sarcastic 'playbook', vague hype, gm/wagmi one-liner;\n"
+                "(c) promotional in ANY form: ads, sponsored/partnership "
+                "content, exchange referral codes, giveaways, airdrops, "
+                "presales/mints/whitelists, token or NFT shilling, "
+                "'join my channel/discord/VIP' invitations, PnL brag/flex "
+                "posts showing leveraged gains, or engagement bait "
+                "('who else is in?', 'like & RT').\n"
                 "STEP 2 — Otherwise translate it to clear, fluent, professional "
                 "Hebrew as a finance desk would phrase it.\n"
                 f"{_TRANSLATE_RULES}"
@@ -689,6 +697,13 @@ def scrape_feed(feed, cutoff):
     return items[:MAX_PER_SOURCE]
 
 
+_SPONSORED_RE = re.compile(
+    r"\b(sponsored|press\s+release|partner\s+content|paid\s+post|promoted|"
+    r"advertorial|brought\s+to\s+you\s+by)\b",
+    re.IGNORECASE,
+)
+
+
 def fetch_all_news():
     """Fetch news from all RSS feeds, deduplicate, sort by date."""
     cutoff = datetime.now(timezone.utc) - timedelta(hours=HOURS_BACK)
@@ -702,8 +717,11 @@ def fetch_all_news():
         key = item["title"].lower()[:50]
         if key in seen:
             continue
-        if not is_crypto_relevant(f"{item['title']} {item.get('desc', '')}"):
+        blob = f"{item['title']} {item.get('desc', '')}"
+        if not is_crypto_relevant(blob):
             continue  # drop off-topic filler (generic AI/tech, lifestyle, etc.)
+        if _SPONSORED_RE.search(blob):
+            continue  # drop sponsored/press-release items from news feeds
         seen.add(key)
         unique.append(item)
     return unique
