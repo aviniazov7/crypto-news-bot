@@ -149,6 +149,9 @@ def set_bot_commands():
         {"command": "groups", "description": "Manage groups"},
         {"command": "health", "description": "Check translation engines"},
         {"command": "check", "description": "Diagnose tracked accounts"},
+        {"command": "addsite", "description": "Add a news site (RSS)"},
+        {"command": "removesite", "description": "Remove a news site"},
+        {"command": "sites", "description": "List news sites"},
     ]
     # Remove commands for all users (default scope)
     tg_request("deleteMyCommands", {})
@@ -409,6 +412,54 @@ def process_message(msg):
             if used >= budget:
                 lines.append(f"{R}⚠️ המכסה נגמרה — ציוצים חדשים ידולגו עד האיפוס (~10:00), גם אם הם ראויים לשליחה.")
             send_message(chat_id, "\n".join(lines), topic_id)
+    elif cmd == "/addsite":
+        parts = text.split(maxsplit=1)
+        R = "‏"
+        if len(parts) < 2:
+            send_message(chat_id, f"{R}שימוש: ‎/addsite <כתובת אתר או RSS>", topic_id)
+        else:
+            send_message(chat_id, f"{R}🔎 מחפש פיד חדשות באתר...", topic_id)
+            found = news.discover_feed(parts[1])
+            if not found:
+                send_message(
+                    chat_id,
+                    f"{R}⚠️ לא מצאתי פיד RSS באתר. נסה להדביק קישור RSS ישיר "
+                    f"(בדרך כלל מסתיים ב-‎/feed או ‎/rss).",
+                    topic_id,
+                )
+            else:
+                name, feed_url = found
+                if storage.add_feed(name, feed_url):
+                    send_message(
+                        chat_id,
+                        f"{R}✅ נוסף: {name}\n{feed_url}\n"
+                        f"{R}החדשות שלו ייכללו בסיכומים הבאים.",
+                        topic_id,
+                    )
+                else:
+                    send_message(chat_id, f"{R}ℹ️ האתר הזה כבר ברשימה.", topic_id)
+    elif cmd == "/removesite":
+        parts = text.split(maxsplit=1)
+        R = "‏"
+        if len(parts) < 2:
+            send_message(chat_id, f"{R}שימוש: ‎/removesite <כתובת או שם>", topic_id)
+        else:
+            removed = storage.remove_feed(parts[1])
+            if removed:
+                send_message(chat_id, f"{R}✅ הוסר: {removed}", topic_id)
+            else:
+                send_message(chat_id, f"{R}⚠️ לא מצאתי אתר כזה ברשימה — ראה ‎/sites", topic_id)
+    elif cmd == "/sites":
+        R = "‏"
+        lines = [f"{R}📰 מקורות חדשות:"]
+        for f in news.RSS_FEEDS:
+            lines.append(f"{R}• {f['name']} (מובנה)")
+        custom = storage.list_feeds()
+        for f in custom:
+            lines.append(f"{R}• {f.get('name', '?')} — {f.get('url', '')}")
+        if not custom:
+            lines.append(f"{R}(אין אתרים שהוספת — הוסף עם ‎/addsite)")
+        send_message(chat_id, "\n".join(lines), topic_id)
     elif cmd == "/groups":
         handle_groups(chat_id, topic_id)
     elif cmd == "/enable":
