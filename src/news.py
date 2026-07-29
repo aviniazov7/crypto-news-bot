@@ -704,84 +704,11 @@ _SPONSORED_RE = re.compile(
 )
 
 
-def _domain_name(url):
-    """'https://www.example.com/feed' → 'example.com' (feed display name)."""
-    host = urllib.parse.urlparse(url).netloc
-    if host.startswith("www."):
-        host = host[4:]
-    return host.split(":")[0]
-
-
-def _is_feed_xml(raw):
-    return "<item>" in raw or "<entry" in raw
-
-
-def discover_feed(url):
-    """Resolve a site or feed URL to (name, feed_url), or None.
-
-    Accepts a direct RSS/Atom URL, or a site homepage — in which case it
-    tries the common feed paths and the <link rel type=rss> tag in the HTML.
-    """
-    url = (url or "").strip()
-    if not url:
-        return None
-    if not url.lower().startswith(("http://", "https://")):
-        url = "https://" + url
-    base = url.rstrip("/")
-    candidates = [url] + [
-        f"{base}{p}"
-        for p in ("/feed", "/rss", "/rss.xml", "/feed.xml", "/atom.xml", "/index.xml")
-    ]
-    html = None
-    tried = set()
-    for cand in candidates:
-        if cand in tried:
-            continue
-        tried.add(cand)
-        try:
-            raw = http_get(cand, timeout=12).decode("utf-8", errors="replace")
-        except Exception:
-            continue
-        if _is_feed_xml(raw):
-            return _domain_name(cand), cand
-        if html is None and "<html" in raw[:2000].lower():
-            html = raw
-    if html:
-        m = re.search(
-            r'<link[^>]+type=["\']application/(?:rss|atom)\+xml["\'][^>]*'
-            r'href=["\']([^"\']+)["\']',
-            html, re.IGNORECASE,
-        ) or re.search(
-            r'<link[^>]+href=["\']([^"\']+)["\'][^>]*'
-            r'type=["\']application/(?:rss|atom)\+xml["\']',
-            html, re.IGNORECASE,
-        )
-        if m:
-            feed_url = urllib.parse.urljoin(url, m.group(1))
-            try:
-                raw = http_get(feed_url, timeout=12).decode("utf-8", errors="replace")
-                if _is_feed_xml(raw):
-                    return _domain_name(feed_url), feed_url
-            except Exception:
-                pass
-    return None
-
-
-def all_feeds():
-    """Built-in feeds plus user-added ones (via /addsite)."""
-    import storage
-    return RSS_FEEDS + [
-        {"name": f.get("name", "?"), "url": f.get("url", "")}
-        for f in storage.list_feeds()
-        if f.get("url")
-    ]
-
-
 def fetch_all_news():
     """Fetch news from all RSS feeds, deduplicate, sort by date."""
     cutoff = datetime.now(timezone.utc) - timedelta(hours=HOURS_BACK)
     all_news = []
-    for feed in all_feeds():
+    for feed in RSS_FEEDS:
         print(f"📡 {feed['name']}...")
         all_news.extend(scrape_feed(feed, cutoff))
     all_news.sort(key=lambda x: x.get("date") or datetime.min.replace(tzinfo=timezone.utc), reverse=True)
