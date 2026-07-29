@@ -170,6 +170,41 @@ def set_meta(key, value):
         _save(data)
 
 
+def list_feeds():
+    """User-added news feeds: [{'name':..., 'url':...}, ...]."""
+    data = _load()
+    return list(data.get("feeds", []))
+
+
+def add_feed(name, url):
+    """Add a custom news feed. Returns False if the URL is already tracked."""
+    with _lock:
+        data = _load()
+        feeds = data.setdefault("feeds", [])
+        if any(f.get("url") == url for f in feeds):
+            return False
+        feeds.append({"name": name, "url": url})
+        _save(data)
+    return True
+
+
+def remove_feed(query):
+    """Remove a custom feed by URL / domain / name substring.
+    Returns the removed feed's name, or None if nothing matched."""
+    q = (query or "").strip().lower()
+    if not q:
+        return None
+    with _lock:
+        data = _load()
+        feeds = data.setdefault("feeds", [])
+        for f in feeds:
+            if q in f.get("url", "").lower() or q in f.get("name", "").lower():
+                feeds.remove(f)
+                _save(data)
+                return f.get("name")
+    return None
+
+
 def add_group(chat_id, name="", topic_id=None):
     """Add/update a group. Returns True if newly added."""
     with _lock:
