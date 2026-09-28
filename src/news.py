@@ -437,7 +437,6 @@ def translate_many(texts, force_fallback=False):
     if not force_fallback and os.environ.get("GEMINI_ONLY", "1") == "1":
         return ["" for _ in texts]
     return [translate_he(t) for t in texts]
-    return [translate_he(t) for t in texts]
 
 
 def filter_and_translate_tweet(text):
@@ -613,19 +612,6 @@ def smart_trim(text, max_len=500):
         return snippet[:idx] + "…"
     return snippet + "…"
 
-
-def wrap_text(text, width=38):
-    words = text.split()
-    lines, current = [], ""
-    for word in words:
-        if current and len(current) + len(word) + 1 > width:
-            lines.append(current)
-            current = word
-        else:
-            current = f"{current} {word}" if current else word
-    if current:
-        lines.append(current)
-    return lines
 
 # ── Relevance filter (shared by RSS news and Twitter) ───────────────
 
@@ -925,84 +911,5 @@ def build_briefing(news, prices):
                 L.append(f"{R}📰 מה חדש היום:")
                 L.append("")
                 L.extend(news_lines)
-
-    return "\n".join(L)
-def build_prices_message(prices):
-    """Build a prices-only message."""
-    R = "\u200F"
-    now = datetime.now(ISRAEL_TZ)
-    L = [f"{R}💰 מחירים | {now.strftime('%H:%M')}", ""]
-
-    if not prices:
-        L.append(f"{R}⚠️ לא הצלחתי לטעון מחירים כרגע")
-        return "\n".join(L)
-
-    changes = [prices[c].get("usd_24h_change", 0) for c in prices]
-    avg = sum(changes) / len(changes) if changes else 0
-    if avg <= -5:
-        mood = "🔴 יום אדום"
-    elif avg <= -2:
-        mood = "🟠 ירידה מתונה"
-    elif avg <= 0:
-        mood = "🟡 יציב"
-    elif avg <= 3:
-        mood = "🟢 עליות"
-    else:
-        mood = "🟢 עליות חדות"
-    L.append(f"{R}{mood}")
-    L.append("")
-
-    for cg_id, sym in COIN_SYMBOLS:
-        d = prices.get(cg_id)
-        if not d:
-            continue
-        p, ch = d["usd"], d.get("usd_24h_change", 0)
-        arrow = "▲" if ch >= 0 else "▼"
-        ps = f"${p:,.0f}" if p >= 1000 else f"${p:,.2f}" if p >= 1 else f"${p:.4f}"
-        L.append(f"{R}  {arrow} {sym}  {ps}  ({ch:+.1f}%)")
-
-    macro = fetch_macro()
-    if macro:
-        L.append("")
-        for label, p, ch in macro:
-            arrow = "▲" if ch >= 0 else "▼"
-            ps = f"${p:,.0f}" if p >= 1000 else f"${p:,.2f}"
-            L.append(f"{R}  {arrow} {label}  {ps}  ({ch:+.1f}%)")
-
-    return "\n".join(L)
-
-
-def build_news_message(news):
-    """Build a news-only message."""
-    R = "\u200F"
-    now = datetime.now(ISRAEL_TZ)
-    L = [f"{R}📰 חדשות אחרונות | {now.strftime('%H:%M')}", ""]
-
-    if not news:
-        L.append(f"{R}אין חדשות חדשות כרגע")
-        return "\n".join(L)
-
-    top = news[:5]
-    to_translate = []
-    for item in top:
-        to_translate.append(item["title"])
-        desc = (item.get("desc") or "").strip()
-        to_translate.append(desc if len(desc) > 30 else "")
-    translated = translate_many(to_translate, force_fallback=True)
-
-    n = 0
-    for i in range(len(top)):
-        title_he = translated[i * 2]
-        if not _has_hebrew(title_he):
-            continue  # Hebrew-only: skip untranslated items
-        n += 1
-        L.append(f"{R}{n}. {bidi_fix(title_he)}")
-        desc_he = translated[i * 2 + 1]
-        if desc_he and _has_hebrew(desc_he):
-            L.append(f"{R}   {bidi_fix(desc_he)}")
-        L.append("")
-
-    if n == 0:
-        L.append(f"{R}⚠️ אין תרגום זמין כרגע — נסה שוב מאוחר יותר")
 
     return "\n".join(L)

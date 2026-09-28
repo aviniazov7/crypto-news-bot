@@ -60,7 +60,7 @@ def _keep_alive():
 
 threading.Thread(target=_keep_alive, daemon=True).start()
 
-# ── Now load the bot (heavy imports: matplotlib, pandas, etc.) ──
+# ── Now load the bot (after the health server is already listening) ──
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from bot import CryptoBot
 
