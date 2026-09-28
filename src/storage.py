@@ -1,7 +1,8 @@
 """
 Persistent storage using Render environment variables.
 Data survives deploys by saving to Render API as an env var.
-Falls back to local file for development.
+Without RENDER_API_KEY / RENDER_SERVICE_ID (local development) state is kept
+in memory only and is lost when the process stops.
 """
 
 import json

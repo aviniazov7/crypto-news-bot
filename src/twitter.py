@@ -6,13 +6,10 @@ Checks tracked accounts for new tweets and returns them for forwarding.
 import re
 import urllib.parse
 import xml.etree.ElementTree as ET
-from datetime import timedelta, timezone
 from html import unescape
 
-from news import http_get, clean_html, parse_date, translate_he, bidi_fix, is_crypto_relevant, filter_and_translate_tweet
+from news import http_get, clean_html, parse_date, bidi_fix, is_crypto_relevant
 import storage
-
-ISRAEL_TZ = timezone(timedelta(hours=3))
 
 NITTER_INSTANCES = [
     "https://nitter.privacydev.net",
@@ -324,18 +321,6 @@ def check_all_accounts():
         if new_tweets:
             results[handle] = new_tweets
     return results
-
-
-def format_tweet_message(tweet):
-    """Format a tweet for Telegram."""
-    R = "\u200F"
-    raw_text = _strip_news_prefix(tweet.get("text") or "")
-    # Telegram photo caption cap is 1024; Hebrew text is ~2x as char-dense as
-    # the English source, so cap raw input around 900 and trim final output.
-    text_he = translate_he(raw_text[:900]) if raw_text else ""
-    if text_he and len(text_he) > 1000:
-        text_he = text_he[:1000].rsplit(" ", 1)[0] + "\u2026"
-    return f"{R}{bidi_fix(text_he) or '(ללא טקסט)'}"
 
 
 def tweet_raw_text(tweet):

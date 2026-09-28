@@ -1,5 +1,18 @@
+# Python
 __pycache__/
 *.pyc
+.venv/
+venv/
+
+# Secrets / local config: never commit
 .env
+.env.*
+!.env.example
+
+# Local state and logs (the bot persists state in the TRACKING_DATA env var)
+data/*
+!data/.gitkeep
+*.log
+
+# OS
 .DS_Store
-data/tracking.json
