@@ -3,6 +3,7 @@
 import contextlib
 import email.utils
 import io
+import json
 import os
 import sys
 import unittest
@@ -63,6 +64,25 @@ class ScrapeFeedTest(unittest.TestCase):
                 contextlib.redirect_stdout(io.StringIO()):
             items = news.fetch_all_news()
         self.assertEqual({i["source"] for i in items}, {"Good A", "Good B"})
+
+
+class StripMarkdownTest(unittest.TestCase):
+    def test_emphasis_bullets_and_headings(self):
+        md = "## כותרת\n**ניתוח פעולת מחיר (PA)**\n* **תרחיש שורי:** $BTC מעל 77K\n- תרחיש דובי: -5%"
+        self.assertEqual(
+            news._strip_markdown(md),
+            "כותרת\nניתוח פעולת מחיר (PA)\n• תרחיש שורי: $BTC מעל 77K\n• תרחיש דובי: -5%",
+        )
+
+    def test_gemini_output_is_cleaned(self):
+        reply = {"candidates": [{"content": {"parts": [{"text": "**ביטקוין** עולה\n* ETF"}]}}]}
+        resp = mock.MagicMock()
+        resp.__enter__.return_value.read.return_value = json.dumps(reply).encode()
+        with mock.patch.object(news, "_GEMINI_KEY", "test-key"), \
+                mock.patch.object(news, "_gemini_count", 0), \
+                mock.patch.object(news.urllib.request, "urlopen", return_value=resp):
+            out = news._gemini_translate_he("Bitcoin is rising")
+        self.assertEqual(out, "ביטקוין עולה\n• ETF")
 
 
 if __name__ == "__main__":
