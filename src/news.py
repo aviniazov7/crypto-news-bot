@@ -667,7 +667,13 @@ def scrape_feed(feed, cutoff):
     except Exception as e:
         print(f"  ⚠️  {feed['name']}: {e}")
         return []
-    root = ET.fromstring(xml_text)
+    try:
+        root = ET.fromstring(xml_text)
+    except ET.ParseError as e:
+        # e.g. an HTML error/challenge page served with HTTP 200 — skip only
+        # this feed instead of aborting the whole briefing.
+        print(f"  ⚠️  {feed['name']}: not valid RSS/XML ({e}), skipping")
+        return []
     items = []
     for el in root.findall(".//item"):
         title = unescape(el.findtext("title", "").strip())
