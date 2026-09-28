@@ -290,7 +290,19 @@ _TRANSLATE_RULES = (
     "'Let's stick to'. Output the FINAL Hebrew sentence and nothing else.\n"
     "- If the source text is cut off mid-sentence, translate only the "
     "complete part and end on a complete sentence.\n"
+    "- Plain text ONLY: no Markdown (no **bold**, no * bullets, no # "
+    "headings).\n"
 )
+
+
+def _strip_markdown(text):
+    """Telegram gets plain text, so Markdown that Gemini adds anyway would
+    show literally ('**bold**', '* item'). Drop emphasis markers and headings,
+    turn leading '*'/'-' bullets into '•'."""
+    text = text.replace("**", "").replace("__", "")
+    text = re.sub(r"^([ \t]*)[*\-][ \t]+", r"\1• ", text, flags=re.M)
+    text = re.sub(r"^[ \t]*#{1,6}[ \t]+", "", text, flags=re.M)
+    return text
 
 
 _META_MARKERS = (
@@ -351,7 +363,7 @@ def _gemini_generate(prompt, max_tokens, temperature=0.2):
     with urllib.request.urlopen(req, timeout=20) as resp:
         data = json.loads(resp.read().decode())
         parts = data.get("candidates", [{}])[0].get("content", {}).get("parts", [])
-        out = (parts[0].get("text", "") if parts else "").strip()
+        out = _strip_markdown(parts[0].get("text", "") if parts else "").strip()
         if not out:
             raise ValueError("empty Gemini response")
         return out
